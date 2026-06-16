@@ -51,7 +51,7 @@ dataset = {
 # print(files_dict)
 
 
-db = lmdb.open('/data/datasets/BCICIV2a/processed_inde_avg_03_50', map_size=1610612736)
+db = lmdb.open('/data/datasets/BCICIV2a/processed_inde_avg_filter', map_size=1610612736)
 for files_key in files_dict.keys():
     for file in files_dict[files_key]:
         print(file)
@@ -76,7 +76,7 @@ for files_key in files_dict.keys():
                 sample = raw_data[anno[0]:anno[1]].transpose(1, 0)
                 sample  = sample - np.mean(sample, axis=0, keepdims=True)
                 # print(samples.shape)
-                b, a = butter_bandpass(0.3, 50, 250)
+                b, a = butter_bandpass(0.3, 40, 250)
                 sample = lfilter(b, a, sample, -1)
                 # print(sample.shape)
                 sample = sample[:, 2 * 250:6 * 250]
