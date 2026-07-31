@@ -53,6 +53,23 @@ def main():
     parser.add_argument('--foundation_dir', type=str,
                         default='pretrained_weights/pretrained_weights.pth',
                         help='foundation_dir')
+    parser.add_argument('--adapter_type', type=str, default='none',
+                        choices=['none', 'channel', 'patch', 'channel_patch'],
+                        help='CBraMod native interaction adapter; none is the dense baseline.')
+    parser.add_argument('--adapter_bottleneck', type=int, default=64,
+                        help='Shared bottleneck width for the native branch Down/Mixer/Up adapter.')
+    parser.add_argument('--adapter_heads', type=int, default=4,
+                        help='Attention heads inside each native branch adapter mixer.')
+    parser.add_argument('--adapter_dropout', type=float, default=0.0,
+                        help='Dropout inside the native branch mixer.')
+    parser.add_argument('--adapter_init_alpha', type=float, default=0.01,
+                        help='Initial scalar for each enabled native branch.')
+    parser.add_argument('--adapter_gamma', type=float, default=1.0,
+                        help='Global residual multiplier for the native adapter.')
+    parser.add_argument('--adapter_zero_init_output', action='store_true', default=True,
+                        help='Initialize adapter Up projections to zero for exact dense parity.')
+    parser.add_argument('--adapter_seed', type=int, default=12345,
+                        help='Independent initialization seed for adapter parameters.')
 
     params = parser.parse_args()
     print(params)

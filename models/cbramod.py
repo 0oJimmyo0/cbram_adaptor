@@ -3,11 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models.criss_cross_transformer import TransformerEncoderLayer, TransformerEncoder
+from models.interaction_adapter import CBraModInteractionAdapter
 
 
 class CBraMod(nn.Module):
     def __init__(self, in_dim=200, out_dim=200, d_model=200, dim_feedforward=800, seq_len=30, n_layer=12,
-                    nhead=8):
+                    nhead=8, adapter_type="none", adapter_bottleneck=64,
+                    adapter_heads=4, adapter_dropout=0.0, adapter_init_alpha=0.01,
+                    adapter_gamma=1.0, adapter_zero_init_output=True,
+                    adapter_seed=12345):
         super().__init__()
         self.patch_embedding = PatchEmbedding(in_dim, out_dim, d_model, seq_len)
         encoder_layer = TransformerEncoderLayer(
@@ -23,10 +27,71 @@ class CBraMod(nn.Module):
             nn.Linear(d_model, out_dim),
         )
         self.apply(_weights_init)
+        self.native_axis_adapter = None
+        self.adapter_type = "none"
+        self._adapter_last_diagnostics = {}
+        if str(adapter_type).strip().lower() != "none":
+            self.enable_interaction_adapter(
+                adapter_type=adapter_type,
+                bottleneck=adapter_bottleneck,
+                num_heads=adapter_heads,
+                dropout=adapter_dropout,
+                init_alpha=adapter_init_alpha,
+                gamma=adapter_gamma,
+                zero_init_output=adapter_zero_init_output,
+                seed=adapter_seed,
+            )
+
+    def enable_interaction_adapter(
+        self,
+        adapter_type="channel_patch",
+        bottleneck=64,
+        num_heads=4,
+        dropout=0.0,
+        init_alpha=0.01,
+        gamma=1.0,
+        zero_init_output=True,
+        seed=12345,
+    ):
+        """Attach the TMLR native interaction adapter after the encoder.
+
+        This method is intentionally separate from checkpoint construction so
+        the original CBraMod checkpoint can be loaded strictly before any new
+        adapter parameters are introduced.
+        """
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(int(seed))
+            self.native_axis_adapter = CBraModInteractionAdapter(
+                d_model=self.encoder.layers[0].self_attn_s.embed_dim * 2,
+                bottleneck=int(bottleneck),
+                num_heads=int(num_heads),
+                dropout=float(dropout),
+                init_alpha=float(init_alpha),
+                gamma=float(gamma),
+                adapter_type=adapter_type,
+                zero_init_output=bool(zero_init_output),
+            )
+        self.adapter_type = str(adapter_type).strip().lower()
+        print(
+            "[CBraMod adapter] interaction-aligned residual enabled: "
+            f"type={self.adapter_type} bottleneck={bottleneck} heads={num_heads} "
+            f"alpha={init_alpha} gamma={gamma} zero_init_output={bool(zero_init_output)}",
+            flush=True,
+        )
+        return self.native_axis_adapter
+
+    def get_adapter_diagnostics(self):
+        if self.native_axis_adapter is None:
+            return {}
+        diagnostics = self.native_axis_adapter.get_diagnostics()
+        diagnostics.update(self.native_axis_adapter.get_gradient_diagnostics())
+        return diagnostics
 
     def forward(self, x, mask=None):
         patch_emb = self.patch_embedding(x, mask)
         feats = self.encoder(patch_emb)
+        if self.native_axis_adapter is not None:
+            feats = feats + self.native_axis_adapter(feats)
 
         out = self.proj_out(feats)
 

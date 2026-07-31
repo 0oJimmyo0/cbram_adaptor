@@ -29,35 +29,40 @@ class Trainer(object):
         self.best_model_states = None
 
         backbone_params = []
+        adapter_params = []
         other_params = []
         for name, param in self.model.named_parameters():
-            if "backbone" in name:
+            if name.startswith("backbone.native_axis_adapter."):
+                adapter_params.append(param)
+                # The native adapter remains trainable in frozen-backbone
+                # mode.  It is the object being evaluated by that control.
+                param.requires_grad = True
+            elif name.startswith("backbone."):
                 backbone_params.append(param)
-
-                if params.frozen:
-                    param.requires_grad = False
-                else:
-                    param.requires_grad = True
+                param.requires_grad = not params.frozen
             else:
                 other_params.append(param)
+
+        trainable_other_params = adapter_params + other_params
 
         if self.params.optimizer == 'AdamW':
             if self.params.multi_lr: # set different learning rates for different modules
                 self.optimizer = torch.optim.AdamW([
-                    {'params': backbone_params, 'lr': self.params.lr},
-                    {'params': other_params, 'lr': 0.001*(self.params.batch_size/256)**0.5}
+                    {'params': [p for p in backbone_params if p.requires_grad], 'lr': self.params.lr},
+                    {'params': [p for p in trainable_other_params if p.requires_grad],
+                     'lr': 0.001*(self.params.batch_size/256)**0.5}
                 ], weight_decay=self.params.weight_decay)
             else:
-                self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.params.lr,
+                self.optimizer = torch.optim.AdamW([p for p in self.model.parameters() if p.requires_grad], lr=self.params.lr,
                                                    weight_decay=self.params.weight_decay)
         else:
             if self.params.multi_lr:
                 self.optimizer = torch.optim.SGD([
-                    {'params': backbone_params, 'lr': self.params.lr},
-                    {'params': other_params, 'lr': self.params.lr * 5}
+                    {'params': [p for p in backbone_params if p.requires_grad], 'lr': self.params.lr},
+                    {'params': [p for p in trainable_other_params if p.requires_grad], 'lr': self.params.lr * 5}
                 ],  momentum=0.9, weight_decay=self.params.weight_decay)
             else:
-                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.params.lr, momentum=0.9,
+                self.optimizer = torch.optim.SGD([p for p in self.model.parameters() if p.requires_grad], lr=self.params.lr, momentum=0.9,
                                                  weight_decay=self.params.weight_decay)
 
         self.data_length = len(self.data_loader['train'])
