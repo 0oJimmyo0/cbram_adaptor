@@ -34,9 +34,14 @@ echo "CBraMod FACED launch: contract=original_cbramod seed=$SEED lr=$LR batch=$B
 echo "git_commit: $(git rev-parse HEAD)" >&2
 echo "checkpoint_sha256: $(sha256sum /data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth | awk '{print $1}')" >&2
 python - <<'PY'
-import sys, torch, lmdb
+import os, sys, torch, lmdb
 import einops, yaml
+expected = os.path.realpath(os.environ["VIRTUAL_ENV"])
+actual = os.path.realpath(sys.prefix)
+if actual != expected:
+    raise RuntimeError(f"Activated environment mismatch: VIRTUAL_ENV={expected} sys.prefix={actual}")
 print("python:", sys.executable)
+print("sys.prefix:", sys.prefix)
 print("torch:", torch.__version__)
 print("cuda:", torch.cuda.is_available(), "count:", torch.cuda.device_count())
 print("lmdb:", lmdb.__file__)
