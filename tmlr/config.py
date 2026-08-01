@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import copy
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover - exercised on the cluster image
+    yaml = None
 
 
 SUPPORTED_METHODS = {"full_finetune", "frozen_probe", "interaction_aligned"}
@@ -90,12 +94,51 @@ def _load_file(path: Optional[str]) -> Dict[str, Any]:
     if not path_obj.is_file():
         raise FileNotFoundError(f"Configuration file not found: {path_obj}")
     with path_obj.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle) if path_obj.suffix.lower() == ".json" else yaml.safe_load(handle)
+        if path_obj.suffix.lower() == ".json":
+            payload = json.load(handle)
+        elif yaml is not None:
+            payload = yaml.safe_load(handle)
+        else:
+            payload = _simple_yaml_mapping(handle.read())
     if payload is None:
         return {}
     if not isinstance(payload, dict):
         raise ValueError("Configuration file must contain a mapping")
     return payload
+
+
+def _simple_yaml_scalar(value: str) -> Any:
+    value = value.strip()
+    if value in {"", "null", "Null", "NULL", "~"}:
+        return None
+    if value.lower() in {"true", "false"}:
+        return value.lower() == "true"
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        return value
+
+
+def _simple_yaml_mapping(text: str) -> Dict[str, Any]:
+    """Parse the flat key/value YAML used by the isolated run configs.
+
+    The cluster training image does not provide PyYAML.  Keeping this fallback
+    deliberately limited prevents an undeclared parser dependency while still
+    rejecting nested config structures that this runner does not support.
+    """
+    result: Dict[str, Any] = {}
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line or line.startswith(("-", " ", "\t")):
+            raise ValueError(f"Unsupported flat YAML syntax at line {line_number}: {raw_line!r}")
+        key, raw_value = line.split(":", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"Empty YAML key at line {line_number}")
+        result[key] = _simple_yaml_scalar(raw_value)
+    return result
 
 
 def validate_config(values: Dict[str, Any]) -> Dict[str, Any]:
