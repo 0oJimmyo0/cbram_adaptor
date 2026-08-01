@@ -20,7 +20,7 @@ SELECTION_METRICS = {"cohen_kappa", "balanced_accuracy", "macro_f1"}
 DEFAULTS: Dict[str, Any] = {
     "dataset_path": "/data/neurogroup/mingyangjiang/data/FACED",
     "channel_manifest": "configs/faced_channel_manifest.json",
-    "checkpoint": "pretrained_weights/pretrained_weights.pth",
+    "checkpoint": "/data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth",
     "output_root": "results/faced",
     "method": "full_finetune",
     "adapter_type": None,

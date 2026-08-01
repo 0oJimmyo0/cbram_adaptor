@@ -6,21 +6,19 @@ the LaBraM repository and EEGxPlore training modules are not imported.
 
 ## Decision at the current gate
 
-**NOT READY for seed-42 training.** The data and code contracts pass, but the
-foundation checkpoint required for a faithful dense baseline is absent from
-the checkout and the project workspace. The runner intentionally stops before
-model construction when the checkpoint is missing. No training or test number
-should be reported from this gate.
+**READY for seed-42 smoke training; not yet ready for the full experiment
+packet.** The data, code, and checkpoint contracts now pass. The checkpoint was
+found at `/data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth`
+and strict loading matched all 211 expected keys with no missing or unexpected
+keys. Its recorded SHA-256 is
+`0792cb808c14e6b7a2bb2ce1dff379bc47bc54c49a779825bdfeb33bf8157178`.
 
 The audit-only artifact is:
 
 `results/faced/faced_audit_gate_20260731/`
 
-The checkpoint expected by the operational config is
-`pretrained_weights/pretrained_weights.pth`. The repository currently contains
-only `pretrained_weights/README.md`, which links to the upstream Hugging Face
-weights. The checkpoint must be obtained and its SHA-256 recorded before the
-smoke gates can run.
+The operational config now points directly to that external checkpoint path;
+the weights are not copied into the Git repository.
 
 ## Exact implementation entry points
 
@@ -83,6 +81,27 @@ The dataset audit also records the split-manifest SHA-256 and channel-manifest
 SHA-256. The exact values are in `dataset_audit.json`, rather than copied into
 this narrative so the artifact remains the source of truth.
 
+## Seed-42 smoke result
+
+The checkpoint-dependent seed-42 smoke sequence completed successfully on the
+local CPU environment for all required method/branch constructions:
+
+- dense `full_finetune`;
+- `frozen_probe`;
+- frozen zero-initialized `interaction_aligned` with `channel`, `patch`, and
+  `channel_patch` branches.
+
+The resulting run directories are under `results/faced/`. The reports confirm
+the expected trainable counts: 1,809 for the head-only probe, 31,614 for each
+single branch plus head, and 61,419 for both branches plus head. The channel
+and patch sequences were recorded as 32 and 10 respectively. With zero-init,
+the first-step Q/K/V gradients were zero while the up-projection gradients
+were nonzero, matching the intended gate behavior.
+
+These are construction and one-batch smoke results, not manuscript
+performance numbers. The current config remains a one-epoch smoke contract;
+the full FACED schedule must be resolved before submitting production runs.
+
 ## Required smoke sequence after the checkpoint is available
 
 Run only seed 42 initially, with the same resolved dataset manifest, scaling,
@@ -114,10 +133,11 @@ checkpoint-dependent model smoke and training/test evaluation.
 
 ## Known limitations at this gate
 
-- No seed-42 performance is available until the foundation checkpoint is
-  supplied and strictly loaded.
-- No multiseed result is available; the TMLR protocol uses exactly three seeds
-  only after the single-seed contract is accepted.
+- The available seed-42 results are smoke-only and use one training batch and
+  one validation batch; they are not manuscript performance results.
+- No full production FACED run or multiseed result is available yet; the TMLR
+  protocol uses exactly three seeds only after the full single-seed contract is
+  accepted.
 - The reserved comparison controls and other datasets are intentionally out of
   scope for this implementation gate.
 - This pipeline does not wire CBraMod to any LaBraM data/model code.
