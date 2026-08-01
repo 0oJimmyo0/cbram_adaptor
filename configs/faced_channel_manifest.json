@@ -1,0 +1,10 @@
+{
+  "dataset": "FACED",
+  "version": 1,
+  "channels": [
+    "FP1", "FP2", "FZ", "F3", "F4", "F7", "F8", "FC1", "FC2", "FC5",
+    "FC6", "CZ", "C3", "C4", "T7", "T8", "CP1", "CP2", "CP5", "CP6",
+    "PZ", "P3", "P4", "P7", "P8", "PO3", "PO4", "OZ", "O1", "O2",
+    "TP9", "TP10"
+  ]
+}

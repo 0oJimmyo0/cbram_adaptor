@@ -102,6 +102,8 @@ class _NativeBranchResidual(nn.Module):
             None if weight.grad is None else weight.grad[2 * dim:]
         )
         diagnostics[f"{prefix}_output_projection_grad_norm"] = norm(self.mixer.out_proj.weight.grad)
+        diagnostics[f"{prefix}_down_grad_norm"] = norm(self.down.weight.grad)
+        diagnostics[f"{prefix}_up_grad_norm"] = norm(self.up.weight.grad)
         diagnostics[f"{prefix}_alpha_grad_norm"] = norm(self.alpha.grad)
         return diagnostics
 

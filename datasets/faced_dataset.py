@@ -21,7 +21,7 @@ class CustomDataset(Dataset):
             raise ValueError(f"FACED mode must be train/val/test, got {mode!r}")
         self.data_dir = os.path.abspath(data_dir)
         self.mode = mode
-        self.db = lmdb.open(data_dir, readonly=True, lock=False, readahead=True, meminit=False)
+        self.db = lmdb.open(self.data_dir, readonly=True, lock=False, readahead=True, meminit=False)
         with self.db.begin(write=False) as txn:
             raw_keys = txn.get(b'__keys__')
             if raw_keys is None:
@@ -53,7 +53,10 @@ class CustomDataset(Dataset):
     def __getitem__(self, idx):
         key = self.keys[idx]
         with self.db.begin(write=False) as txn:
-            pair = pickle.loads(txn.get(key.encode()))
+            raw_pair = txn.get(key.encode())
+            if raw_pair is None:
+                raise KeyError(f"FACED LMDB key not found: {key!r}")
+            pair = pickle.loads(raw_pair)
         data = np.asarray(pair['sample'])
         if tuple(data.shape) != EXPECTED_SHAPE:
             raise ValueError(
