@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO_DIR="/data/neurogroup/mingyangjiang/EEGxPlore/CBraMod"
-ENV_DIR="${ENV_DIR:-/data/neurogroup/mingyangjiang/venvs/labram-accre}"
+ENV_DIR="${ENV_DIR:-/data/neurogroup/mingyangjiang/venvs/cbramod-accre}"
 CONFIG="${CONFIG:-$REPO_DIR/configs/faced_tmlr.yaml}"
 SEED="${SEED:-42}"
 LR="${LR:-1e-4}"
@@ -35,10 +35,13 @@ echo "git_commit: $(git rev-parse HEAD)" >&2
 echo "checkpoint_sha256: $(sha256sum /data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth | awk '{print $1}')" >&2
 python - <<'PY'
 import sys, torch, lmdb
+import einops, yaml
 print("python:", sys.executable)
 print("torch:", torch.__version__)
 print("cuda:", torch.cuda.is_available(), "count:", torch.cuda.device_count())
 print("lmdb:", lmdb.__file__)
+print("einops:", einops.__version__)
+print("pyyaml:", yaml.__version__)
 PY
 nvidia-smi || true
 

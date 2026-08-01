@@ -1,4 +1,5 @@
 einops
+PyYAML
 h5py
 lmdb
 matplotlib
