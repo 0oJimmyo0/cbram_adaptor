@@ -16,6 +16,9 @@ SUPPORTED_METHODS = {"full_finetune", "frozen_probe", "interaction_aligned"}
 RESERVED_METHODS = {"upper_k_finetune", "lora", "generic_bottleneck", "axis_blind"}
 ADAPTER_TYPES = {"channel", "patch", "channel_patch"}
 SELECTION_METRICS = {"cohen_kappa", "balanced_accuracy", "macro_f1"}
+OPTIMIZER_CONTRACTS = {"explicit", "original_cbramod"}
+SCHEDULERS = {"none", "cosine_per_iteration"}
+LOADER_CONTRACTS = {"explicit_seeded", "original_cbramod"}
 
 DEFAULTS: Dict[str, Any] = {
     "dataset_path": "/data/neurogroup/mingyangjiang/data/FACED",
@@ -45,10 +48,14 @@ DEFAULTS: Dict[str, Any] = {
     "weight_decay": 0.05,
     "head_weight_decay": 0.05,
     "adapter_weight_decay": 0.05,
+    "optimizer_contract": "explicit",
+    "scheduler": "none",
+    "scheduler_eta_min": 1e-6,
+    "loader_contract": "explicit_seeded",
     "label_smoothing": 0.1,
     "clip_grad": 1.0,
     "selection_metric": "cohen_kappa",
-    "classifier": "avgpooling_patch_reps",
+    "classifier": "all_patch_reps",
     "dropout": 0.1,
     "input_scale_divisor": 100.0,
     "num_classes": 9,
@@ -113,11 +120,26 @@ def validate_config(values: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"method={method} must not request adapter_type={adapter_type!r}")
     if resolved["selection_metric"] not in SELECTION_METRICS:
         raise ValueError(f"selection_metric must be one of {sorted(SELECTION_METRICS)}")
-    if resolved["classifier"] != "avgpooling_patch_reps":
+    if resolved["classifier"] not in {"avgpooling_patch_reps", "all_patch_reps"}:
         raise ValueError(
-            "The isolated TMLR runner currently supports only the explicit "
-            "avgpooling_patch_reps classifier."
+            "The isolated TMLR runner supports only avgpooling_patch_reps "
+            "and all_patch_reps classifiers."
         )
+    if resolved["optimizer_contract"] not in OPTIMIZER_CONTRACTS:
+        raise ValueError(f"optimizer_contract must be one of {sorted(OPTIMIZER_CONTRACTS)}")
+    if resolved["scheduler"] not in SCHEDULERS:
+        raise ValueError(f"scheduler must be one of {sorted(SCHEDULERS)}")
+    if resolved["loader_contract"] not in LOADER_CONTRACTS:
+        raise ValueError(f"loader_contract must be one of {sorted(LOADER_CONTRACTS)}")
+    if resolved["optimizer_contract"] == "original_cbramod":
+        if method != "full_finetune":
+            raise ValueError("original_cbramod optimizer contract is only valid for full_finetune")
+        if resolved["classifier"] != "all_patch_reps":
+            raise ValueError("original_cbramod requires classifier=all_patch_reps")
+        if resolved["scheduler"] != "cosine_per_iteration":
+            raise ValueError("original_cbramod requires scheduler=cosine_per_iteration")
+        if resolved["loader_contract"] != "original_cbramod":
+            raise ValueError("original_cbramod requires loader_contract=original_cbramod")
     if int(resolved["num_classes"]) != 9:
         raise ValueError("FACED TMLR requires num_classes=9")
     if float(resolved["input_scale_divisor"]) != 100.0:
@@ -148,7 +170,9 @@ def build_parser() -> argparse.ArgumentParser:
         ("checkpoint", {"type": str}), ("output_root", {"type": str}),
         ("method", {"type": str}), ("adapter_type", {"type": str}),
         ("classifier", {"type": str}), ("selection_metric", {"type": str}),
-        ("device", {"type": str}), ("run_id", {"type": str}),
+        ("optimizer_contract", {"type": str}), ("scheduler", {"type": str}),
+        ("loader_contract", {"type": str}), ("device", {"type": str}),
+        ("run_id", {"type": str}),
         ("resume_from", {"type": str}),
     ):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, **kwargs)
@@ -161,7 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
     for name in (
         "adapter_dropout", "adapter_init_alpha", "adapter_gamma", "lr", "head_lr",
         "adapter_lr", "weight_decay", "head_weight_decay", "adapter_weight_decay",
-        "dropout", "input_scale_divisor", "label_smoothing", "clip_grad",
+        "scheduler_eta_min", "dropout", "input_scale_divisor", "label_smoothing", "clip_grad",
     ):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, type=float)
     for name in ("adapter_zero_init_output", "save_test", "overwrite"):

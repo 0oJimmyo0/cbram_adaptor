@@ -13,6 +13,7 @@ from typing import Any, Dict, Iterable, Optional
 import numpy as np
 import torch
 import torch.nn as nn
+from einops.layers.torch import Rearrange
 from torch.utils.data import DataLoader
 
 from datasets.faced_dataset import CustomDataset
@@ -48,6 +49,11 @@ def resolve_device(value: str) -> torch.device:
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError(f"Requested {device}, but CUDA is unavailable")
     return device
+
+
+def _original_head_learning_rate(batch_size: int) -> float:
+    """Return the source CBraMod ``multi_lr`` classifier learning rate."""
+    return 0.001 * (float(batch_size) / 256.0) ** 0.5
 
 
 class FacedClassifier(nn.Module):
@@ -105,8 +111,30 @@ class FacedClassifier(nn.Module):
         elif config.method not in {"full_finetune", "frozen_probe"}:
             raise NotImplementedError(f"Method {config.method!r} is not implemented")
 
-        torch.manual_seed(int(config.head_seed))
-        self.classifier = nn.Linear(200, config.num_classes)
+        # The source CBraMod FACED implementation uses the global seed set by
+        # finetune_main.py.  A separate head seed remains available for the
+        # explicit TMLR runner, but must be disabled for an exact source run.
+        if config.head_seed is not None:
+            torch.manual_seed(int(config.head_seed))
+        if config.classifier == "avgpooling_patch_reps":
+            self._uses_pooled_features = True
+            self.classifier = nn.Linear(200, config.num_classes)
+        elif config.classifier == "all_patch_reps":
+            self._uses_pooled_features = False
+            # Exact source model_for_faced.Model classifier.  Do not simplify
+            # this head in the original_cbramod baseline contract.
+            self.classifier = nn.Sequential(
+                Rearrange("b c s d -> b (c s d)"),
+                nn.Linear(32 * 10 * 200, 10 * 200),
+                nn.ELU(),
+                nn.Dropout(config.dropout),
+                nn.Linear(10 * 200, 200),
+                nn.ELU(),
+                nn.Dropout(config.dropout),
+                nn.Linear(200, config.num_classes),
+            )
+        else:
+            raise ValueError(f"Unsupported FACED classifier: {config.classifier}")
         checkpoint_report["model_parameter_count_after_attachment"] = int(
             sum(parameter.numel() for parameter in self.parameters())
         )
@@ -120,8 +148,9 @@ class FacedClassifier(nn.Module):
         features = self.backbone(inputs)
         if features.ndim != 4:
             raise RuntimeError(f"CBraMod encoder output must be [B,C,S,D], got {tuple(features.shape)}")
-        pooled = features.mean(dim=(1, 2))
-        return self.classifier(pooled)
+        if self._uses_pooled_features:
+            features = features.mean(dim=(1, 2))
+        return self.classifier(features)
 
 
 def _torch_load(path: Path, device: torch.device) -> Any:
@@ -158,6 +187,19 @@ def make_loaders(config: FacedTMLRConfig) -> Dict[str, DataLoader]:
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
+
+    if config.loader_contract == "original_cbramod":
+        # This intentionally mirrors datasets/faced_dataset.py in the source
+        # repository: no explicit generator, worker initializer, or pin-memory
+        # override is supplied.
+        return {
+            "train": DataLoader(train_set, batch_size=int(config.batch_size),
+                                 collate_fn=train_set.collate, shuffle=True),
+            "val": DataLoader(val_set, batch_size=int(config.batch_size),
+                               collate_fn=val_set.collate, shuffle=False),
+            "test": DataLoader(test_set, batch_size=int(config.batch_size),
+                                collate_fn=test_set.collate, shuffle=False),
+        }
 
     common = {
         "batch_size": int(config.batch_size),
@@ -311,16 +353,36 @@ def run(config: FacedTMLRConfig) -> Dict[str, Any]:
     writer.write_json("structure_spec.json", {**structure_spec(), "runtime": geometry})
     writer.write_json("checkpoint_load_report.json", model.checkpoint_report)
 
+    head_lr = config.head_lr
+    if config.optimizer_contract == "original_cbramod":
+        head_lr = _original_head_learning_rate(config.batch_size)
+    if head_lr is None:
+        raise ValueError("head_lr must be set for the explicit optimizer contract")
     optimizer_groups, trainability = apply_trainability_contract(
         model, config.method, config.adapter_type,
-        lr=config.lr, head_lr=config.head_lr, adapter_lr=config.adapter_lr,
+        lr=config.lr, head_lr=head_lr, adapter_lr=config.adapter_lr,
         weight_decay=config.weight_decay,
         head_weight_decay=config.head_weight_decay,
         adapter_weight_decay=config.adapter_weight_decay,
     )
     optimizer = torch.optim.AdamW(optimizer_groups)
+    steps_per_epoch = len(loaders["train"])
+    if config.max_train_batches is not None:
+        steps_per_epoch = min(steps_per_epoch, int(config.max_train_batches))
+    scheduler = None
+    if config.scheduler == "cosine_per_iteration":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=int(config.epochs) * steps_per_epoch,
+            eta_min=float(config.scheduler_eta_min),
+        )
     writer.write_json("trainability_report.json", trainability)
-    writer.write_json("optimizer_groups.json", trainability["optimizer_groups"])
+    writer.write_json("optimizer_groups.json", {
+        "contract": config.optimizer_contract,
+        "scheduler": config.scheduler,
+        "scheduler_eta_min": float(config.scheduler_eta_min),
+        "groups": trainability["optimizer_groups"],
+    })
     if config.resume_from:
         resume_path = Path(config.resume_from).expanduser().resolve()
         if not resume_path.is_file():
@@ -362,6 +424,8 @@ def run(config: FacedTMLRConfig) -> Dict[str, Any]:
                     float(config.clip_grad),
                 )
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
             losses.append(float(loss.detach().cpu()))
         if not losses:
             raise RuntimeError("No training batches were processed")
@@ -373,6 +437,7 @@ def run(config: FacedTMLRConfig) -> Dict[str, Any]:
         validation["epoch"] = epoch
         validation["train_loss"] = float(np.mean(losses))
         validation["elapsed_seconds"] = float(time.time() - epoch_started)
+        validation["learning_rates"] = [float(group["lr"]) for group in optimizer.param_groups]
         writer.append_jsonl("metrics_by_epoch.jsonl", validation)
         adapter_diagnostics = model.backbone.get_adapter_diagnostics()
         adapter_diagnostics.update(last_gradient_report)
