@@ -28,10 +28,10 @@ DEVICE="${DEVICE:-cuda}"
 mkdir -p "$REPO_DIR/logs/slurm/cbram_faced" "$REPO_DIR/results/faced"
 
 unset PYTHONPATH CONDA_PREFIX CONDA_DEFAULT_ENV CONDA_SHLVL
-module --force purge >/dev/null 2>&1 || true
-module load gentoo/2023 gcc/12.3 python/3.11.5 scipy-stack/2026a >/dev/null 2>&1 || true
 export PYTHONNOUSERSITE=1
+echo "Using dedicated CBraMod environment: $ENV_DIR" >&2
 source "$ENV_DIR/bin/activate"
+echo "Activated Python: $(command -v python)" >&2
 cd "$REPO_DIR"
 
 echo "CBraMod FACED launch: config=$CONFIG method=${METHOD:-from_config} adapter=${ADAPTER_TYPE:-none} seed=$SEED lr=$LR batch=$BATCH_SIZE epochs=$EPOCHS run_id=$RUN_ID" >&2
