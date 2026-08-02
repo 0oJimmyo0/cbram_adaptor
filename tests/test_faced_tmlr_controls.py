@@ -25,7 +25,7 @@ class TinyClassifier(nn.Module):
             self.backbone.enable_generic_adapter(bottleneck=8, seed=7)
         elif mode == "axis_blind":
             self.backbone.enable_generic_adapter(bottleneck=8, seed=7, adapter_type="axis_blind")
-        elif mode == "interaction_aligned":
+        elif mode in {"interaction_aligned", "native_full_finetune"}:
             self.backbone.enable_interaction_adapter(
                 adapter_type="channel_patch", bottleneck=8, num_heads=2, seed=7,
             )
@@ -42,13 +42,14 @@ class TinyClassifier(nn.Module):
     ("generic_bottleneck", "generic_bottleneck"),
     ("axis_blind", "axis_blind"),
     ("interaction_aligned", "interaction_aligned"),
+    ("native_full_finetune", "native_full_finetune"),
     ("lora", "lora"),
     ("upper_k_finetune", "none"),
 ])
 def test_control_trainability_is_explicit(method, mode):
     model = TinyClassifier(mode)
     groups, report = apply_trainability_contract(
-        model, method, "channel_patch" if method == "interaction_aligned" else None,
+        model, method, "channel_patch" if method in {"interaction_aligned", "native_full_finetune"} else None,
     )
     assert groups
     assert report["trainable_parameter_count"] > 0
@@ -58,8 +59,11 @@ def test_control_trainability_is_explicit(method, mode):
     elif method == "upper_k_finetune":
         assert report["component_trainable_parameter_counts"]["upper"] > 0
         assert report["component_trainable_parameter_counts"]["backbone"] == 0
+    elif method == "interaction_aligned":
+        assert report["component_trainable_parameter_counts"]["adapter"] > 0
     else:
         assert report["component_trainable_parameter_counts"]["adapter"] > 0
+        assert report["component_trainable_parameter_counts"]["backbone"] > 0
 
 
 def test_lora_forward_and_gradients():

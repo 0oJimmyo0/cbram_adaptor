@@ -98,7 +98,7 @@ class FacedClassifier(nn.Module):
             sum(parameter.numel() for parameter in self.backbone.parameters())
         )
 
-        if config.method == "interaction_aligned":
+        if config.method in {"interaction_aligned", "native_full_finetune"}:
             self.backbone.enable_interaction_adapter(
                 adapter_type=config.adapter_type,
                 bottleneck=config.adapter_bottleneck,

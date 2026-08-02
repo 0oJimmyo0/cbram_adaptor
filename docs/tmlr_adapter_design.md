@@ -63,9 +63,20 @@ Before any paper run:
    any adapter condition.
 
 Only after these gates should the FACED registry run dense, frozen controls,
-native channel/patch/channel+patch, generic, independent LoRA, and upper-block
-controls with seeds `{42,1024,3407}`. Test performance is retained for
-reporting but never used to select the recipe or checkpoint.
+native channel/patch/channel+patch, native full-backbone-plus-adapter
+conditions, generic, independent LoRA, and upper-block controls with seeds
+`{42,1024,3407}`. Test performance is retained for reporting but never used to
+select the recipe or checkpoint.
+
+The native adapter has two distinct trainability regimes:
+
+- `interaction_aligned`: frozen CBraMod plus native adapter and classifier;
+- `native_full_finetune`: trainable CBraMod plus the same native adapter and
+  classifier.
+
+The second regime is a complement to, not a replacement for, dense
+fine-tuning. It tests whether the native residual adds value when the backbone
+is allowed to move. The two regimes must not be pooled into one headline.
 
 This repository is the dedicated CBraMod TMLR clone. No LaBraM import,
 EEGxPlore depth/router code, or ICASSP experiment is part of this implementation.

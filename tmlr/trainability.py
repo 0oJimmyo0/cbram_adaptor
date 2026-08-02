@@ -56,14 +56,16 @@ def apply_trainability_contract(
 
     native_exists = getattr(getattr(model, "backbone", None), "native_axis_adapter", None) is not None
     generic_exists = getattr(getattr(model, "backbone", None), "generic_adapter", None) is not None
-    expected_adapter = method in {"interaction_aligned", "generic_bottleneck", "axis_blind"}
+    expected_adapter = method in {
+        "interaction_aligned", "native_full_finetune", "generic_bottleneck", "axis_blind",
+    }
     if expected_adapter != (native_exists or generic_exists):
         raise AssertionError(
             f"Requested {method} but adaptation existence is {native_exists or generic_exists}; "
             "the method must not silently fall back."
         )
-    if method == "interaction_aligned" and adapter_type not in ADAPTER_TYPES:
-        raise ValueError(f"interaction_aligned requires adapter_type in {sorted(ADAPTER_TYPES)}")
+    if method in {"interaction_aligned", "native_full_finetune"} and adapter_type not in ADAPTER_TYPES:
+        raise ValueError(f"{method} requires adapter_type in {sorted(ADAPTER_TYPES)}")
 
     trainable_names: List[str] = []
     frozen_names: List[str] = []
@@ -79,6 +81,8 @@ def apply_trainability_contract(
             should_train = component == "classifier"
         elif method in {"interaction_aligned", "generic_bottleneck", "axis_blind"}:
             should_train = component in {"adapter", "classifier"}
+        elif method == "native_full_finetune":
+            should_train = component in {"backbone", "upper", "adapter", "classifier"}
         elif method == "lora":
             should_train = component in {"lora", "classifier"}
         elif method == "upper_k_finetune":
@@ -176,6 +180,10 @@ def _assert_contract(model: torch.nn.Module, report: Dict[str, Any]) -> None:
         assert adapter_names <= trainable
         assert not (base_backbone_names & trainable)
         assert not upper_names & trainable
+        assert not lora_names & trainable
+    elif method == "native_full_finetune":
+        assert adapter_names <= trainable
+        assert (base_backbone_names | upper_names) <= trainable
         assert not lora_names & trainable
     elif method == "lora":
         assert lora_names <= trainable

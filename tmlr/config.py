@@ -18,7 +18,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on the cluster image
 
 SUPPORTED_METHODS = {
     "full_finetune", "frozen_probe", "interaction_aligned",
-    "generic_bottleneck", "lora", "upper_k_finetune", "axis_blind",
+    "native_full_finetune", "generic_bottleneck", "lora", "upper_k_finetune", "axis_blind",
 }
 RESERVED_METHODS = set()
 ADAPTER_TYPES = {"channel", "patch", "channel_patch"}
@@ -163,7 +163,7 @@ def validate_config(values: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"Unknown method {method!r}; supported now: {sorted(SUPPORTED_METHODS)}")
 
     adapter_type = resolved.get("adapter_type")
-    if method == "interaction_aligned":
+    if method in {"interaction_aligned", "native_full_finetune"}:
         if adapter_type not in ADAPTER_TYPES:
             raise ValueError(
                 "interaction_aligned requires adapter_type in "
