@@ -10,8 +10,14 @@ from .config import ADAPTER_TYPES, RESERVED_METHODS, SUPPORTED_METHODS
 
 
 def _component(name: str) -> str:
-    if name.startswith("backbone.native_axis_adapter."):
+    if ".lora_A" in name or ".lora_B" in name:
+        return "lora"
+    if name.startswith("backbone.native_axis_adapter.") or name.startswith("backbone.generic_adapter."):
         return "adapter"
+    if name.startswith("backbone.encoder.layers."):
+        parts = name.split(".")
+        if len(parts) > 3 and parts[3].isdigit() and int(parts[3]) >= 10:
+            return "upper"
     if name.startswith("backbone."):
         return "backbone"
     if name.startswith("classifier."):
@@ -30,6 +36,8 @@ def apply_trainability_contract(
     lr: float = 1e-4,
     head_lr: float = 1e-3,
     adapter_lr: float = 1e-3,
+    lora_lr: float = 5e-4,
+    upper_lr: float = 1e-4,
     weight_decay: float = 0.05,
     head_weight_decay: float = 0.05,
     adapter_weight_decay: float = 0.05,
@@ -46,85 +54,94 @@ def apply_trainability_contract(
     for _, parameter in named:
         parameter.requires_grad_(False)
 
-    adapter_exists = getattr(getattr(model, "backbone", None), "native_axis_adapter", None) is not None
-    expected_adapter = method == "interaction_aligned"
-    if expected_adapter != adapter_exists:
+    native_exists = getattr(getattr(model, "backbone", None), "native_axis_adapter", None) is not None
+    generic_exists = getattr(getattr(model, "backbone", None), "generic_adapter", None) is not None
+    expected_adapter = method in {"interaction_aligned", "generic_bottleneck", "axis_blind"}
+    if expected_adapter != (native_exists or generic_exists):
         raise AssertionError(
-            f"Requested {method} but adapter existence is {adapter_exists}; "
+            f"Requested {method} but adaptation existence is {native_exists or generic_exists}; "
             "the method must not silently fall back."
         )
-    if expected_adapter and adapter_type not in ADAPTER_TYPES:
+    if method == "interaction_aligned" and adapter_type not in ADAPTER_TYPES:
         raise ValueError(f"interaction_aligned requires adapter_type in {sorted(ADAPTER_TYPES)}")
 
     trainable_names: List[str] = []
     frozen_names: List[str] = []
-    component_names: Dict[str, List[str]] = {key: [] for key in ("backbone", "adapter", "classifier", "other")}
+    component_names: Dict[str, List[str]] = {
+        key: [] for key in ("backbone", "upper", "lora", "adapter", "classifier", "other")
+    }
     for name, parameter in named:
         component = _component(name)
         component_names[component].append(name)
         if method == "full_finetune":
-            should_train = component in {"backbone", "classifier"}
+            should_train = component in {"backbone", "upper", "classifier"}
         elif method == "frozen_probe":
             should_train = component == "classifier"
-        else:
+        elif method in {"interaction_aligned", "generic_bottleneck", "axis_blind"}:
             should_train = component in {"adapter", "classifier"}
+        elif method == "lora":
+            should_train = component in {"lora", "classifier"}
+        elif method == "upper_k_finetune":
+            should_train = component in {"upper", "classifier"}
+        else:
+            raise ValueError(f"Unsupported trainability method {method!r}")
         parameter.requires_grad_(should_train)
         (trainable_names if should_train else frozen_names).append(name)
 
     if not component_names["backbone"] or not component_names["classifier"]:
         raise AssertionError("Expected nonempty backbone and classifier components")
     if expected_adapter and not component_names["adapter"]:
-        raise AssertionError("Expected nonempty native adapter component")
+        raise AssertionError("Expected nonempty adapter component")
     if not expected_adapter and component_names["adapter"]:
-        raise AssertionError("Adapter parameters exist for a method that requires adapter absence")
+        raise AssertionError("Adapter parameters exist for a method that requires no adapter")
+    if method == "lora" and not component_names["lora"]:
+        raise AssertionError("LoRA method did not expose LoRA parameters")
+    if method == "upper_k_finetune" and not component_names["upper"]:
+        raise AssertionError("upper_k_finetune did not expose upper-block parameters")
     if component_names["other"]:
         raise AssertionError(f"Unexpected unclassified parameters: {component_names['other'][:5]}")
 
+    named_dict = dict(named)
     group_specs = [
         ("backbone", "backbone", float(lr), float(weight_decay)),
+        ("upper", "upper", float(upper_lr), float(weight_decay)),
+        ("lora", "lora", float(lora_lr), float(adapter_weight_decay)),
         ("adapter", "adapter", float(adapter_lr), float(adapter_weight_decay)),
         ("classifier", "classifier", float(head_lr), float(head_weight_decay)),
     ]
     groups: List[Dict[str, Any]] = []
     optimizer_group_report = []
     for group_name, component, group_lr, group_decay in group_specs:
-        group_names = [
-            name for name in component_names[component]
-            if dict(named)[name].requires_grad
-        ]
+        group_names = [name for name in component_names[component] if named_dict[name].requires_grad]
         if group_names:
             groups.append({
                 "name": group_name,
-                "params": [dict(named)[name] for name in group_names],
+                "params": [named_dict[name] for name in group_names],
                 "lr": group_lr,
                 "weight_decay": group_decay,
             })
             optimizer_group_report.append({
                 "name": group_name,
                 "parameter_names": group_names,
-                "parameter_count": _count(dict(named)[name] for name in group_names),
+                "parameter_count": _count(named_dict[name] for name in group_names),
                 "learning_rate": group_lr,
                 "weight_decay": group_decay,
             })
     if not groups:
         raise AssertionError("Trainability contract produced no optimizer parameters")
 
-    total = _count(parameter for _, parameter in named)
-    trainable = _count(parameter for _, parameter in named if parameter.requires_grad)
     report = {
         "method": method,
         "adapter_type": adapter_type,
-        "total_parameter_count": total,
-        "trainable_parameter_count": trainable,
-        "trainable_percentage": 100.0 * trainable / total,
+        "total_parameter_count": _count(parameter for _, parameter in named),
+        "trainable_parameter_count": _count(parameter for _, parameter in named if parameter.requires_grad),
+        "trainable_percentage": 100.0 * _count(parameter for _, parameter in named if parameter.requires_grad) / _count(parameter for _, parameter in named),
         "component_parameter_counts": {
-            component: _count(dict(named)[name] for name in names)
+            component: _count(named_dict[name] for name in names)
             for component, names in component_names.items()
         },
         "component_trainable_parameter_counts": {
-            component: _count(
-                dict(named)[name] for name in names if dict(named)[name].requires_grad
-            )
+            component: _count(named_dict[name] for name in names if named_dict[name].requires_grad)
             for component, names in component_names.items()
         },
         "trainable_parameter_names": trainable_names,
@@ -138,19 +155,35 @@ def apply_trainability_contract(
 def _assert_contract(model: torch.nn.Module, report: Dict[str, Any]) -> None:
     method = report["method"]
     trainable = set(report["trainable_parameter_names"])
-    backbone_names = {name for name, _ in model.named_parameters() if name.startswith("backbone.")}
-    adapter_names = {name for name, _ in model.named_parameters() if name.startswith("backbone.native_axis_adapter.")}
-    classifier_names = {name for name, _ in model.named_parameters() if name.startswith("classifier.")}
+    all_names = {name for name, _ in model.named_parameters()}
+    backbone_names = {name for name in all_names if name.startswith("backbone.")}
+    base_backbone_names = {name for name in backbone_names if _component(name) == "backbone"}
+    upper_names = {name for name in backbone_names if _component(name) == "upper"}
+    lora_names = {name for name in backbone_names if _component(name) == "lora"}
+    adapter_names = {
+        name for name in backbone_names
+        if name.startswith("backbone.native_axis_adapter.") or name.startswith("backbone.generic_adapter.")
+    }
+    classifier_names = {name for name in all_names if name.startswith("classifier.")}
+    assert classifier_names <= trainable
     if method == "full_finetune":
-        assert not adapter_names
-        assert backbone_names <= trainable
-        assert classifier_names <= trainable
+        assert not adapter_names and not lora_names
+        assert (base_backbone_names | upper_names) <= trainable
     elif method == "frozen_probe":
-        assert not adapter_names
+        assert not adapter_names and not lora_names
         assert not (backbone_names & trainable)
-        assert classifier_names <= trainable
-    else:
-        assert adapter_names
+    elif method in {"interaction_aligned", "generic_bottleneck", "axis_blind"}:
         assert adapter_names <= trainable
-        assert classifier_names <= trainable
-        assert not ((backbone_names - adapter_names) & trainable)
+        assert not (base_backbone_names & trainable)
+        assert not upper_names & trainable
+        assert not lora_names & trainable
+    elif method == "lora":
+        assert lora_names <= trainable
+        assert not (base_backbone_names & trainable)
+        assert not upper_names & trainable
+        assert not adapter_names & trainable
+    elif method == "upper_k_finetune":
+        assert upper_names <= trainable
+        assert not (base_backbone_names & trainable)
+        assert not lora_names & trainable
+        assert not adapter_names & trainable

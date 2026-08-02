@@ -13,12 +13,15 @@ set -euo pipefail
 
 REPO_DIR="/data/neurogroup/mingyangjiang/EEGxPlore/CBraMod"
 ENV_DIR="${ENV_DIR:-/data/neurogroup/mingyangjiang/venvs/cbramod-accre}"
-CONFIG="${CONFIG:-$REPO_DIR/configs/faced_tmlr.yaml}"
+CONFIG="${CONFIG:-$REPO_DIR/configs/faced_tmlr_locked.yaml}"
 SEED="${SEED:-42}"
 LR="${LR:-1e-4}"
 BATCH_SIZE="${BATCH_SIZE:-64}"
 EPOCHS="${EPOCHS:-50}"
-RUN_ID="${RUN_ID:-faced_cbramod_original_s${SEED}_lr${LR}_b${BATCH_SIZE}_e${EPOCHS}}"
+METHOD="${METHOD:-}"
+ADAPTER_TYPE="${ADAPTER_TYPE:-}"
+ADAPTER_SEED="${ADAPTER_SEED:-}"
+RUN_ID="${RUN_ID:-faced_cbramod_${METHOD:-full_finetune}_${ADAPTER_TYPE:-none}_s${SEED}_lr${LR}_b${BATCH_SIZE}_e${EPOCHS}}"
 DEVICE="${DEVICE:-cuda}"
 
 mkdir -p "$REPO_DIR/logs/slurm/cbram_faced" "$REPO_DIR/results/faced"
@@ -30,7 +33,7 @@ export PYTHONNOUSERSITE=1
 source "$ENV_DIR/bin/activate"
 cd "$REPO_DIR"
 
-echo "CBraMod FACED launch: contract=original_cbramod seed=$SEED lr=$LR batch=$BATCH_SIZE epochs=$EPOCHS run_id=$RUN_ID" >&2
+echo "CBraMod FACED launch: config=$CONFIG method=${METHOD:-from_config} adapter=${ADAPTER_TYPE:-none} seed=$SEED lr=$LR batch=$BATCH_SIZE epochs=$EPOCHS run_id=$RUN_ID" >&2
 echo "git_commit: $(git rev-parse HEAD)" >&2
 echo "checkpoint_sha256: $(sha256sum /data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth | awk '{print $1}')" >&2
 python - <<'PY'
@@ -50,11 +53,18 @@ print("pyyaml:", yaml.__version__)
 PY
 nvidia-smi || true
 
-OMP_NUM_THREADS=1 python -u run_faced_tmlr.py \
-  --config "$CONFIG" \
-  --seed "$SEED" \
-  --lr "$LR" \
-  --batch-size "$BATCH_SIZE" \
-  --epochs "$EPOCHS" \
-  --device "$DEVICE" \
+RUN_ARGS=(
+  --config "$CONFIG"
+  --seed "$SEED"
+  --lr "$LR"
+  --batch-size "$BATCH_SIZE"
+  --epochs "$EPOCHS"
+  --device "$DEVICE"
   --run-id "$RUN_ID"
+)
+if [[ -n "$METHOD" ]]; then RUN_ARGS+=(--method "$METHOD"); fi
+if [[ -n "$ADAPTER_TYPE" ]]; then RUN_ARGS+=(--adapter-type "$ADAPTER_TYPE"); fi
+if [[ -n "$ADAPTER_SEED" ]]; then RUN_ARGS+=(--adapter-seed "$ADAPTER_SEED"); fi
+
+OMP_NUM_THREADS=1 python -u run_faced_tmlr.py \
+  "${RUN_ARGS[@]}"

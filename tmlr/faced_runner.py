@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 
 from datasets.faced_dataset import CustomDataset
 from models.cbramod import CBraMod
+from models.lora import inject_qkv_lora, lora_diagnostics
 
 from .artifact_writer import ArtifactWriter
 from .config import FacedTMLRConfig
@@ -108,7 +109,27 @@ class FacedClassifier(nn.Module):
                 zero_init_output=config.adapter_zero_init_output,
                 seed=config.adapter_seed,
             )
-        elif config.method not in {"full_finetune", "frozen_probe"}:
+        elif config.method == "generic_bottleneck":
+            self.backbone.enable_generic_adapter(
+                bottleneck=config.generic_bottleneck,
+                init_alpha=config.adapter_init_alpha,
+                gamma=config.adapter_gamma,
+                zero_init_output=config.adapter_zero_init_output,
+                seed=config.adapter_seed,
+                adapter_type="generic_bottleneck",
+            )
+        elif config.method == "axis_blind":
+            self.backbone.enable_generic_adapter(
+                bottleneck=config.axis_blind_bottleneck,
+                init_alpha=config.adapter_init_alpha,
+                gamma=config.adapter_gamma,
+                zero_init_output=config.adapter_zero_init_output,
+                seed=config.adapter_seed,
+                adapter_type="axis_blind",
+            )
+        elif config.method == "lora":
+            inject_qkv_lora(self.backbone, rank=config.lora_rank, alpha=config.lora_alpha)
+        elif config.method not in {"full_finetune", "frozen_probe", "upper_k_finetune"}:
             raise NotImplementedError(f"Method {config.method!r} is not implemented")
 
         # The source CBraMod FACED implementation uses the global seed set by
@@ -138,10 +159,15 @@ class FacedClassifier(nn.Module):
         checkpoint_report["model_parameter_count_after_attachment"] = int(
             sum(parameter.numel() for parameter in self.parameters())
         )
-        checkpoint_report["adapter_parameter_count"] = int(
-            sum(parameter.numel() for parameter in self.backbone.native_axis_adapter.parameters())
-            if self.backbone.native_axis_adapter is not None else 0
-        )
+        checkpoint_report["adapter_parameter_count"] = int(sum(
+            parameter.numel() for name, parameter in self.named_parameters()
+            if name.startswith("backbone.native_axis_adapter.")
+            or name.startswith("backbone.generic_adapter.")
+        ))
+        checkpoint_report["lora_parameter_count"] = int(sum(
+            parameter.numel() for name, parameter in self.named_parameters()
+            if ".lora_A" in name or ".lora_B" in name
+        ))
         self.checkpoint_report = checkpoint_report
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -269,17 +295,30 @@ def _norm(values: Iterable[torch.Tensor]) -> float:
     return float(sum(value.float().pow(2).sum() for value in values).sqrt())
 
 
+def _parameter_component(name: str) -> str:
+    if ".lora_A" in name or ".lora_B" in name:
+        return "lora"
+    if name.startswith("backbone.native_axis_adapter.") or name.startswith("backbone.generic_adapter."):
+        return "adapter"
+    if name.startswith("backbone.encoder.layers."):
+        parts = name.split(".")
+        if len(parts) > 3 and parts[3].isdigit() and int(parts[3]) >= 10:
+            return "upper"
+    if name.startswith("backbone."):
+        return "backbone"
+    if name.startswith("classifier."):
+        return "classifier"
+    return "other"
+
+
 def _gradient_report(model: nn.Module) -> Dict[str, float]:
-    components = {"backbone": [], "adapter": [], "classifier": []}
+    components = {"backbone": [], "upper": [], "adapter": [], "lora": [], "classifier": []}
     for name, parameter in model.named_parameters():
         if parameter.grad is None:
             continue
-        if name.startswith("backbone.native_axis_adapter."):
-            components["adapter"].append(parameter.grad.detach().cpu())
-        elif name.startswith("backbone."):
-            components["backbone"].append(parameter.grad.detach().cpu())
-        elif name.startswith("classifier."):
-            components["classifier"].append(parameter.grad.detach().cpu())
+        component = _parameter_component(name)
+        if component in components:
+            components[component].append(parameter.grad.detach().cpu())
     return {
         f"{component}_gradient_norm": _norm(values) if values else 0.0
         for component, values in components.items()
@@ -287,17 +326,13 @@ def _gradient_report(model: nn.Module) -> Dict[str, float]:
 
 
 def _update_report(model: nn.Module, before: Dict[str, torch.Tensor]) -> Dict[str, float]:
-    values = {"backbone": [], "adapter": [], "classifier": []}
-    relative = {"backbone": [], "adapter": [], "classifier": []}
+    values = {"backbone": [], "upper": [], "adapter": [], "lora": [], "classifier": []}
+    relative = {"backbone": [], "upper": [], "adapter": [], "lora": [], "classifier": []}
     for name, parameter in model.named_parameters():
         if name not in before:
             continue
-        component = (
-            "adapter" if name.startswith("backbone.native_axis_adapter.") else
-            "backbone" if name.startswith("backbone.") else
-            "classifier" if name.startswith("classifier.") else None
-        )
-        if component is None:
+        component = _parameter_component(name)
+        if component not in values:
             continue
         difference = parameter.detach().cpu() - before[name]
         values[component].append(difference)
@@ -361,6 +396,7 @@ def run(config: FacedTMLRConfig) -> Dict[str, Any]:
     optimizer_groups, trainability = apply_trainability_contract(
         model, config.method, config.adapter_type,
         lr=config.lr, head_lr=head_lr, adapter_lr=config.adapter_lr,
+        lora_lr=config.lora_lr, upper_lr=config.upper_lr,
         weight_decay=config.weight_decay,
         head_weight_decay=config.head_weight_decay,
         adapter_weight_decay=config.adapter_weight_decay,
@@ -440,6 +476,8 @@ def run(config: FacedTMLRConfig) -> Dict[str, Any]:
         validation["learning_rates"] = [float(group["lr"]) for group in optimizer.param_groups]
         writer.append_jsonl("metrics_by_epoch.jsonl", validation)
         adapter_diagnostics = model.backbone.get_adapter_diagnostics()
+        if config.method == "lora":
+            adapter_diagnostics.update(lora_diagnostics(model))
         adapter_diagnostics.update(last_gradient_report)
         adapter_diagnostics.update(_update_report(model, before))
         adapter_diagnostics["epoch"] = epoch

@@ -16,11 +16,14 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on the cluster image
     yaml = None
 
 
-SUPPORTED_METHODS = {"full_finetune", "frozen_probe", "interaction_aligned"}
-RESERVED_METHODS = {"upper_k_finetune", "lora", "generic_bottleneck", "axis_blind"}
+SUPPORTED_METHODS = {
+    "full_finetune", "frozen_probe", "interaction_aligned",
+    "generic_bottleneck", "lora", "upper_k_finetune", "axis_blind",
+}
+RESERVED_METHODS = set()
 ADAPTER_TYPES = {"channel", "patch", "channel_patch"}
 SELECTION_METRICS = {"cohen_kappa", "balanced_accuracy", "macro_f1"}
-OPTIMIZER_CONTRACTS = {"explicit", "original_cbramod"}
+OPTIMIZER_CONTRACTS = {"explicit", "locked_cbramod", "original_cbramod"}
 SCHEDULERS = {"none", "cosine_per_iteration"}
 LOADER_CONTRACTS = {"explicit_seeded", "original_cbramod"}
 
@@ -41,6 +44,11 @@ DEFAULTS: Dict[str, Any] = {
     "head_seed": 10042,
     "loader_seed": 20042,
     "adapter_seed": 30042,
+    "generic_bottleneck": 64,
+    "axis_blind_bottleneck": 148,
+    "upper_k": 2,
+    "lora_rank": 8,
+    "lora_alpha": 16.0,
     "batch_size": 16,
     "epochs": 1,
     "max_train_batches": None,
@@ -52,6 +60,8 @@ DEFAULTS: Dict[str, Any] = {
     "weight_decay": 0.05,
     "head_weight_decay": 0.05,
     "adapter_weight_decay": 0.05,
+    "lora_lr": 0.0005,
+    "upper_lr": 0.0001,
     "optimizer_contract": "explicit",
     "scheduler": "none",
     "scheduler_eta_min": 1e-6,
@@ -174,21 +184,24 @@ def validate_config(values: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"scheduler must be one of {sorted(SCHEDULERS)}")
     if resolved["loader_contract"] not in LOADER_CONTRACTS:
         raise ValueError(f"loader_contract must be one of {sorted(LOADER_CONTRACTS)}")
+    if resolved["optimizer_contract"] in {"locked_cbramod", "original_cbramod"}:
+        if resolved["classifier"] != "all_patch_reps":
+            raise ValueError(f"{resolved['optimizer_contract']} requires classifier=all_patch_reps")
+        if resolved["scheduler"] != "cosine_per_iteration":
+            raise ValueError(f"{resolved['optimizer_contract']} requires scheduler=cosine_per_iteration")
+        if resolved["loader_contract"] != "original_cbramod":
+            raise ValueError(f"{resolved['optimizer_contract']} requires loader_contract=original_cbramod")
     if resolved["optimizer_contract"] == "original_cbramod":
         if method != "full_finetune":
             raise ValueError("original_cbramod optimizer contract is only valid for full_finetune")
-        if resolved["classifier"] != "all_patch_reps":
-            raise ValueError("original_cbramod requires classifier=all_patch_reps")
-        if resolved["scheduler"] != "cosine_per_iteration":
-            raise ValueError("original_cbramod requires scheduler=cosine_per_iteration")
-        if resolved["loader_contract"] != "original_cbramod":
-            raise ValueError("original_cbramod requires loader_contract=original_cbramod")
     if int(resolved["num_classes"]) != 9:
         raise ValueError("FACED TMLR requires num_classes=9")
     if float(resolved["input_scale_divisor"]) != 100.0:
         raise ValueError("FACED TMLR requires input_scale_divisor=100")
     if int(resolved["batch_size"]) <= 0 or int(resolved["epochs"]) <= 0:
         raise ValueError("batch_size and epochs must be positive")
+    if int(resolved["upper_k"]) != 2:
+        raise ValueError("The TMLR FACED upper-block control is fixed to upper_k=2")
     if int(resolved["num_workers"]) < 0:
         raise ValueError("num_workers cannot be negative")
     for field in ("max_train_batches", "max_val_batches"):
@@ -220,7 +233,8 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, **kwargs)
     for name in (
-        "adapter_bottleneck", "adapter_heads", "seed", "head_seed", "loader_seed",
+        "adapter_bottleneck", "adapter_heads", "generic_bottleneck", "axis_blind_bottleneck",
+        "upper_k", "lora_rank", "seed", "head_seed", "loader_seed",
         "adapter_seed", "batch_size", "epochs", "max_train_batches", "max_val_batches",
         "num_workers", "num_classes",
     ):
@@ -228,7 +242,8 @@ def build_parser() -> argparse.ArgumentParser:
     for name in (
         "adapter_dropout", "adapter_init_alpha", "adapter_gamma", "lr", "head_lr",
         "adapter_lr", "weight_decay", "head_weight_decay", "adapter_weight_decay",
-        "scheduler_eta_min", "dropout", "input_scale_divisor", "label_smoothing", "clip_grad",
+        "lora_lr", "upper_lr", "lora_alpha", "scheduler_eta_min", "dropout",
+        "input_scale_divisor", "label_smoothing", "clip_grad",
     ):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, type=float)
     for name in ("adapter_zero_init_output", "save_test", "overwrite"):

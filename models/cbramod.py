@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models.criss_cross_transformer import TransformerEncoderLayer, TransformerEncoder
+from models.generic_adapter import GenericBottleneckResidual
 from models.interaction_adapter import CBraModInteractionAdapter
 
 
@@ -28,6 +29,7 @@ class CBraMod(nn.Module):
         )
         self.apply(_weights_init)
         self.native_axis_adapter = None
+        self.generic_adapter = None
         self.adapter_type = "none"
         self._adapter_last_diagnostics = {}
         if str(adapter_type).strip().lower() != "none":
@@ -80,11 +82,42 @@ class CBraMod(nn.Module):
         )
         return self.native_axis_adapter
 
+    def enable_generic_adapter(
+        self,
+        bottleneck=64,
+        init_alpha=0.01,
+        gamma=1.0,
+        zero_init_output=True,
+        seed=12345,
+        adapter_type="generic_bottleneck",
+    ):
+        """Attach a token-wise generic or parameter-matched axis-blind adapter."""
+        if adapter_type not in {"generic_bottleneck", "axis_blind"}:
+            raise ValueError(f"Unknown generic adapter type: {adapter_type!r}")
+        if self.native_axis_adapter is not None or self.generic_adapter is not None:
+            raise RuntimeError("Only one CBraMod adaptation family may be attached")
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(int(seed))
+            self.generic_adapter = GenericBottleneckResidual(
+                d_model=self.encoder.layers[0].self_attn_s.embed_dim * 2,
+                bottleneck=int(bottleneck),
+                init_alpha=float(init_alpha),
+                gamma=float(gamma),
+                zero_init_output=bool(zero_init_output),
+            )
+        self.adapter_type = str(adapter_type)
+        return self.generic_adapter
+
     def get_adapter_diagnostics(self):
-        if self.native_axis_adapter is None:
-            return {}
-        diagnostics = self.native_axis_adapter.get_diagnostics()
-        diagnostics.update(self.native_axis_adapter.get_gradient_diagnostics())
+        if self.native_axis_adapter is not None:
+            diagnostics = self.native_axis_adapter.get_diagnostics()
+            diagnostics.update(self.native_axis_adapter.get_gradient_diagnostics())
+            return diagnostics
+        if self.generic_adapter is not None:
+            diagnostics = self.generic_adapter.get_diagnostics()
+            diagnostics.update(self.generic_adapter.get_gradient_diagnostics())
+            return diagnostics
+        diagnostics = {}
         return diagnostics
 
     def forward(self, x, mask=None):
@@ -92,6 +125,8 @@ class CBraMod(nn.Module):
         feats = self.encoder(patch_emb)
         if self.native_axis_adapter is not None:
             feats = feats + self.native_axis_adapter(feats)
+        if self.generic_adapter is not None:
+            feats = feats + self.generic_adapter(feats)
 
         out = self.proj_out(feats)
 
