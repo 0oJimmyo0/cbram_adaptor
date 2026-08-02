@@ -21,6 +21,7 @@ EPOCHS="${EPOCHS:-50}"
 METHOD="${METHOD:-}"
 ADAPTER_TYPE="${ADAPTER_TYPE:-}"
 ADAPTER_SEED="${ADAPTER_SEED:-}"
+ADAPTER_LR="${ADAPTER_LR:-}"
 RUN_ID="${RUN_ID:-faced_cbramod_${METHOD:-full_finetune}_${ADAPTER_TYPE:-none}_s${SEED}_lr${LR}_b${BATCH_SIZE}_e${EPOCHS}}"
 DEVICE="${DEVICE:-cuda}"
 
@@ -65,6 +66,7 @@ RUN_ARGS=(
 if [[ -n "$METHOD" ]]; then RUN_ARGS+=(--method "$METHOD"); fi
 if [[ -n "$ADAPTER_TYPE" ]]; then RUN_ARGS+=(--adapter-type "$ADAPTER_TYPE"); fi
 if [[ -n "$ADAPTER_SEED" ]]; then RUN_ARGS+=(--adapter-seed "$ADAPTER_SEED"); fi
+if [[ -n "$ADAPTER_LR" ]]; then RUN_ARGS+=(--adapter-lr "$ADAPTER_LR"); fi
 
 OMP_NUM_THREADS=1 python -u run_faced_tmlr.py \
   "${RUN_ARGS[@]}"
