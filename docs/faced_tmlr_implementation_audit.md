@@ -56,11 +56,14 @@ Supported methods in this gate are:
 - `full_finetune`: original CBraMod backbone plus the shared classifier head;
 - `frozen_probe`: frozen CBraMod plus the shared classifier head;
 - `interaction_aligned`: frozen CBraMod plus `channel`, `patch`, or
-  `channel_patch` adapter and the shared classifier head.
+  `channel_patch` adapter and the shared classifier head;
+- `native_full_finetune`: trainable CBraMod plus the same native adapter and
+  shared classifier head.
 
 `upper_k_finetune`, `lora`, `generic_bottleneck`, and `axis_blind` are
-reserved and fail explicitly with `NotImplementedError`; they are not silently
-substituted by another method.
+independent comparison methods. They are never silently substituted for a
+native adapter. The native adapter is not combined with LoRA or generic
+controls.
 
 ## FACED provenance result
 
@@ -90,6 +93,8 @@ local CPU environment for all required method/branch constructions:
 - `frozen_probe`;
 - frozen zero-initialized `interaction_aligned` with `channel`, `patch`, and
   `channel_patch` branches.
+- trainable-backbone zero-initialized `native_full_finetune` construction for
+  `channel`, `patch`, and `channel_patch`.
 
 The resulting run directories are under `results/faced/`. The reports confirm
 the expected trainable counts: 1,809 for the head-only probe, 31,614 for each
@@ -117,7 +122,8 @@ The runner must produce strict checkpoint-load evidence (path, SHA-256,
 missing/unexpected keys and parameter counts), runtime geometry, trainability
 groups, per-epoch metrics, adapter gradients/update norms, validation-selected
 test metrics, per-class metrics, confusion matrix, timing, memory and a best
-model. Only after these gates pass should the three-seed packet be scheduled.
+model. Only after these gates pass should each condition enter the three-seed
+packet.
 
 ## Test evidence
 
