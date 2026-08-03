@@ -129,6 +129,7 @@ class CBraModInteractionAdapter(nn.Module):
         gamma: float = 1.0,
         adapter_type: str = "channel_patch",
         zero_init_output: bool = True,
+        allow_singleton_patch: bool = False,
     ) -> None:
         super().__init__()
         adapter_type = str(adapter_type).strip().lower()
@@ -143,6 +144,7 @@ class CBraModInteractionAdapter(nn.Module):
         self.adapter_type = adapter_type
         self.gamma = float(gamma)
         self.zero_init_output = bool(zero_init_output)
+        self.allow_singleton_patch = bool(allow_singleton_patch)
 
         if adapter_type in {"channel", "channel_patch"}:
             self.channel_branch = _NativeBranchResidual(
@@ -167,7 +169,7 @@ class CBraModInteractionAdapter(nn.Module):
             raise ValueError(f"Expected d_model={self.d_model}, got {dim}")
         if hasattr(self, "channel_branch") and channels <= 1:
             raise ValueError("CBraMod channel interaction requires C > 1")
-        if hasattr(self, "patch_branch") and patches <= 1:
+        if hasattr(self, "patch_branch") and patches <= 1 and not self.allow_singleton_patch:
             raise ValueError("CBraMod patch interaction requires S > 1")
 
         self._last_geometry = {
@@ -184,6 +186,9 @@ class CBraModInteractionAdapter(nn.Module):
             ),
             "patch_temporal_interactions_active": int(
                 hasattr(self, "patch_branch") and patches > 1
+            ),
+            "singleton_patch_control": int(
+                hasattr(self, "patch_branch") and patches <= 1 and self.allow_singleton_patch
             ),
         }
 

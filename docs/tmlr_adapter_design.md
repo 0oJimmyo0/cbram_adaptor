@@ -41,6 +41,13 @@ eligible. The adapter is attached once after the pretrained encoder output,
 matching the current LaBraM residual placement while leaving all pretrained
 CBraMod blocks and their criss-cross semantics unchanged.
 
+For SEED-V, the realized geometry is `[B,62,1,200]`. The channel branch is
+therefore a genuine native-axis adapter over 62 electrodes. The patch branch
+is retained only as an explicitly enabled singleton-axis capacity control;
+with one temporal patch it cannot perform temporal patch-to-patch interaction.
+This geometry distinction is part of the result interpretation, not a
+post-hoc exclusion.
+
 The Up projections are zero-initialized by default. This gives exact dense
 parity at initialization while preserving gradients into the adapter core.
 The branch alpha parameters and residual/update diagnostics are recorded for

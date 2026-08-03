@@ -28,6 +28,7 @@ SCHEDULERS = {"none", "cosine_per_iteration"}
 LOADER_CONTRACTS = {"explicit_seeded", "original_cbramod"}
 
 DEFAULTS: Dict[str, Any] = {
+    "dataset_name": "FACED",
     "dataset_path": "/data/neurogroup/mingyangjiang/data/FACED",
     "channel_manifest": "configs/faced_channel_manifest.json",
     "checkpoint": "/data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth",
@@ -40,6 +41,7 @@ DEFAULTS: Dict[str, Any] = {
     "adapter_init_alpha": 0.01,
     "adapter_gamma": 1.0,
     "adapter_zero_init_output": True,
+    "allow_singleton_patch_control": False,
     "seed": 42,
     "head_seed": 10042,
     "loader_seed": 20042,
@@ -53,6 +55,7 @@ DEFAULTS: Dict[str, Any] = {
     "epochs": 1,
     "max_train_batches": None,
     "max_val_batches": None,
+    "max_test_batches": None,
     "num_workers": 0,
     "lr": 1e-4,
     "head_lr": 1e-3,
@@ -153,6 +156,10 @@ def _simple_yaml_mapping(text: str) -> Dict[str, Any]:
 
 def validate_config(values: Dict[str, Any]) -> Dict[str, Any]:
     resolved = copy.deepcopy(values)
+    dataset_name = str(resolved.get("dataset_name", "FACED")).strip().upper().replace("_", "-")
+    if dataset_name not in {"FACED", "SEED-V"}:
+        raise ValueError(f"Unsupported CBraMod TMLR dataset: {dataset_name!r}")
+    resolved["dataset_name"] = dataset_name
     method = str(resolved["method"]).strip().lower()
     resolved["method"] = method
     if method in RESERVED_METHODS:
@@ -194,17 +201,18 @@ def validate_config(values: Dict[str, Any]) -> Dict[str, Any]:
     if resolved["optimizer_contract"] == "original_cbramod":
         if method != "full_finetune":
             raise ValueError("original_cbramod optimizer contract is only valid for full_finetune")
-    if int(resolved["num_classes"]) != 9:
-        raise ValueError("FACED TMLR requires num_classes=9")
+    expected_classes = 9 if dataset_name == "FACED" else 5
+    if int(resolved["num_classes"]) != expected_classes:
+        raise ValueError(f"{dataset_name} TMLR requires num_classes={expected_classes}")
     if float(resolved["input_scale_divisor"]) != 100.0:
         raise ValueError("FACED TMLR requires input_scale_divisor=100")
     if int(resolved["batch_size"]) <= 0 or int(resolved["epochs"]) <= 0:
         raise ValueError("batch_size and epochs must be positive")
-    if int(resolved["upper_k"]) != 2:
+    if dataset_name == "FACED" and int(resolved["upper_k"]) != 2:
         raise ValueError("The TMLR FACED upper-block control is fixed to upper_k=2")
     if int(resolved["num_workers"]) < 0:
         raise ValueError("num_workers cannot be negative")
-    for field in ("max_train_batches", "max_val_batches"):
+    for field in ("max_train_batches", "max_val_batches", "max_test_batches"):
         if resolved.get(field) is not None and int(resolved[field]) <= 0:
             raise ValueError(f"{field} must be positive when provided")
     return resolved
@@ -219,10 +227,10 @@ def build_config(config_path: Optional[str], overrides: Optional[Dict[str, Any]]
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="CBraMod TMLR FACED runner")
+    parser = argparse.ArgumentParser(description="CBraMod TMLR dataset runner")
     parser.add_argument("--config", default=None)
     for name, kwargs in (
-        ("dataset_path", {"type": str}), ("channel_manifest", {"type": str}),
+        ("dataset_name", {"type": str}), ("dataset_path", {"type": str}), ("channel_manifest", {"type": str}),
         ("checkpoint", {"type": str}), ("output_root", {"type": str}),
         ("method", {"type": str}), ("adapter_type", {"type": str}),
         ("classifier", {"type": str}), ("selection_metric", {"type": str}),
@@ -236,7 +244,7 @@ def build_parser() -> argparse.ArgumentParser:
         "adapter_bottleneck", "adapter_heads", "generic_bottleneck", "axis_blind_bottleneck",
         "upper_k", "lora_rank", "seed", "head_seed", "loader_seed",
         "adapter_seed", "batch_size", "epochs", "max_train_batches", "max_val_batches",
-        "num_workers", "num_classes",
+        "max_test_batches", "num_workers", "num_classes",
     ):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, type=int)
     for name in (
@@ -251,6 +259,11 @@ def build_parser() -> argparse.ArgumentParser:
             f"--{name.replace('_', '-')}", dest=name, default=None,
             action=argparse.BooleanOptionalAction,
         )
+    parser.add_argument(
+        "--allow-singleton-patch-control", dest="allow_singleton_patch_control",
+        default=None, action=argparse.BooleanOptionalAction,
+        help="Explicitly permit the singleton SEED-V patch-capacity control.",
+    )
     parser.add_argument("--audit-only", action="store_true", default=None)
     parser.add_argument("--smoke", action="store_true", default=None)
     return parser

@@ -108,6 +108,7 @@ class FacedClassifier(nn.Module):
                 gamma=config.adapter_gamma,
                 zero_init_output=config.adapter_zero_init_output,
                 seed=config.adapter_seed,
+                allow_singleton_patch=config.allow_singleton_patch_control,
             )
         elif config.method == "generic_bottleneck":
             self.backbone.enable_generic_adapter(

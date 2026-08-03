@@ -54,6 +54,7 @@ class CBraMod(nn.Module):
         gamma=1.0,
         zero_init_output=True,
         seed=12345,
+        allow_singleton_patch=False,
     ):
         """Attach the TMLR native interaction adapter after the encoder.
 
@@ -72,6 +73,7 @@ class CBraMod(nn.Module):
                 gamma=float(gamma),
                 adapter_type=adapter_type,
                 zero_init_output=bool(zero_init_output),
+                allow_singleton_patch=bool(allow_singleton_patch),
             )
         self.adapter_type = str(adapter_type).strip().lower()
         print(
