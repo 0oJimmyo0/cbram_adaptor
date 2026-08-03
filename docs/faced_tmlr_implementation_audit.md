@@ -6,8 +6,8 @@ the LaBraM repository and EEGxPlore training modules are not imported.
 
 ## Decision at the current gate
 
-**READY for the production FACED packet, with frozen-native multiseed
-validation still pending.** The data, code, and checkpoint contracts pass. The checkpoint was
+**FACED production packet complete.** The data, code, checkpoint, and
+three-seed condition contracts pass. The checkpoint was
 found at `/data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth`
 and strict loading matched all 211 expected keys with no missing or unexpected
 keys. Its recorded SHA-256 is
@@ -133,15 +133,20 @@ scaling, classifier, split, batch size, and 50-epoch budget:
   for seeds `42,1024,3407`;
 - `native_full_finetune` channel, patch, and channel+patch: complete for
   seeds `42,1024,3407`;
-- `interaction_aligned` channel, patch, and channel+patch: seed 42 is complete;
-  seeds `1024,3407` are the remaining six runs.
+- `interaction_aligned` channel, patch, and channel+patch: complete for seeds
+  `42,1024,3407` using the promoted `adapter_lr=5e-4` contract. The exploratory
+  seed-42 `adapter_lr=1e-4` packet is retained separately.
+
+The final frozen-native test BA means are channel `0.2730`, patch `0.3141`,
+and channel+patch `0.3303`. These are conditional frozen-backbone results,
+not replacements for dense fine-tuning.
 
 The runner must produce strict checkpoint-load evidence (path, SHA-256,
 missing/unexpected keys and parameter counts), runtime geometry, trainability
 groups, per-epoch metrics, adapter gradients/update norms, validation-selected
 test metrics, per-class metrics, confusion matrix, timing, memory and a best
 model. Test metrics are retained for reporting but are never used to choose
-the recipe or checkpoint.
+the recipe or checkpoint. No production FACED run remains.
 
 ## Test evidence
 
@@ -158,8 +163,8 @@ checkpoint-dependent model smoke and training/test evaluation.
 ## Known limitations at this gate
 
 - The frozen-native seed-42 condition is weak under the lower exploratory
-  `adapter_lr=1e-4` setting; the remaining multiseed packet uses the stronger
-  tested `adapter_lr=5e-4` setting and must be interpreted separately from the
+  `adapter_lr=1e-4` setting. The completed multiseed packet uses the stronger
+  tested `adapter_lr=5e-4` setting and is interpreted separately from the
   native full-backbone regime.
 - Native full-backbone adapters are a lightweight residual augmentation, not a
   replacement for dense full fine-tuning; current FACED results are close to
