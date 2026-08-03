@@ -19,6 +19,7 @@ ENV_DIR="${ENV_DIR:-/data/neurogroup/mingyangjiang/venvs/cbramod-accre}"
 CONFIG="${CONFIG:-$REPO_DIR/configs/seedv_tmlr_locked.yaml}"
 SEED="${SEED:-42}"
 ADAPTER_SEED="${ADAPTER_SEED:-30042}"
+LOADER_SEED="${LOADER_SEED:-$((20000 + SEED))}"
 METHOD="${METHOD:-frozen_probe}"
 ADAPTER_TYPE="${ADAPTER_TYPE:-}"
 RUN_ID="${RUN_ID:-seedv_cbramod_${METHOD}_${ADAPTER_TYPE:-none}_s${SEED}}"
@@ -59,6 +60,7 @@ nvidia-smi || true
 RUN_ARGS=(
   --config "$CONFIG" --method "$METHOD" --seed "$SEED"
   --adapter-seed "$ADAPTER_SEED" --lr "$LR" --adapter-lr "$ADAPTER_LR"
+  --loader-seed "$LOADER_SEED"
   --batch-size "$BATCH_SIZE" --epochs "$EPOCHS" --device "$DEVICE"
   --run-id "$RUN_ID"
 )
