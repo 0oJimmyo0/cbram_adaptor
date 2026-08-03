@@ -6,8 +6,8 @@ the LaBraM repository and EEGxPlore training modules are not imported.
 
 ## Decision at the current gate
 
-**READY for seed-42 smoke training; not yet ready for the full experiment
-packet.** The data, code, and checkpoint contracts now pass. The checkpoint was
+**READY for the production FACED packet, with frozen-native multiseed
+validation still pending.** The data, code, and checkpoint contracts pass. The checkpoint was
 found at `/data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth`
 and strict loading matched all 211 expected keys with no missing or unexpected
 keys. Its recorded SHA-256 is
@@ -31,7 +31,7 @@ the weights are not copied into the Git repository.
 | FACED loader | `datasets/faced_dataset.py:13-73` | LMDB split loading, 32-channel validation, `(32,10,200)` validation, finite-value check, `/100` scaling. |
 | Provenance audit | `tmlr/provenance.py:126-256` | Full LMDB scan, manifest/channel-order check, hashes, shape/dtype/scaling and overlap checks. |
 | Dedicated runner | `run_faced_tmlr.py:1-10` and `tmlr/faced_runner.py:274-446` | Resolved configuration, strict load, geometry gate, training, validation selection, test evaluation and artifacts. |
-| Classifier head | `tmlr/faced_runner.py:53-124` | Explicit mean over `[C,S]`, then `Linear(200,9)`; identical head contract across methods. |
+| Classifier head | `tmlr/faced_runner.py:53-124` | Source-style `all_patch_reps` head: flatten `[B,32,10,200]`, then `Linear(64000,200) -> Linear(200,200) -> Linear(200,9)` with ELU/dropout; identical across methods. |
 | Metrics | `tmlr/metrics.py:26-80` | Balanced accuracy and macro-F1 primary; kappa, weighted-F1, accuracy, loss, per-class metrics and confusion matrix secondary. |
 | Trainability registry | `tmlr/trainability.py:26-157` | Explicit full-finetune, frozen-probe and interaction-aligned parameter groups/assertions. |
 | Artifacts | `tmlr/artifact_writer.py:14-39` | Immutable machine-readable run directory writer. |
@@ -65,6 +65,12 @@ independent comparison methods. They are never silently substituted for a
 native adapter. The native adapter is not combined with LoRA or generic
 controls.
 
+The locked FACED classifier is **not** a mean-pooled linear probe. It uses the
+source-style `all_patch_reps` head so that the dense baseline and every adapter
+condition share the same downstream capacity. This is why the classifier
+accounts for most trainable parameters in frozen-backbone runs; the CBraMod
+backbone itself remains frozen under `interaction_aligned`.
+
 ## FACED provenance result
 
 The audit scanned the local LMDB at
@@ -84,7 +90,7 @@ The dataset audit also records the split-manifest SHA-256 and channel-manifest
 SHA-256. The exact values are in `dataset_audit.json`, rather than copied into
 this narrative so the artifact remains the source of truth.
 
-## Seed-42 smoke result
+## Construction smoke and production evidence
 
 The checkpoint-dependent seed-42 smoke sequence completed successfully on the
 local CPU environment for all required method/branch constructions:
@@ -103,27 +109,39 @@ and patch sequences were recorded as 32 and 10 respectively. With zero-init,
 the first-step Q/K/V gradients were zero while the up-projection gradients
 were nonzero, matching the intended gate behavior.
 
-These are construction and one-batch smoke results, not manuscript
-performance numbers. The current config remains a one-epoch smoke contract;
-the full FACED schedule must be resolved before submitting production runs.
+These construction checks are historical smoke evidence, not manuscript
+performance numbers. The production runner subsequently used the locked
+50-epoch schedule, full train/validation/test splits, validation-kappa
+selection, strict checkpoint loading, and the same `all_patch_reps` head for
+every condition.
 
-## Required smoke sequence after the checkpoint is available
+The dense baseline and independent controls (generic bottleneck, LoRA QKV-r8,
+upper-2, axis-blind, and frozen probe) have complete three-seed packets. The
+native full-backbone channel, patch, and channel+patch conditions also have
+complete three-seed packets. Their artifact directories contain per-epoch
+metrics, strict-load reports, trainability contracts, adapter diagnostics, and
+test metrics.
 
-Run only seed 42 initially, with the same resolved dataset manifest, scaling,
-head, split, batch, and epoch budget:
+## Production checklist status
 
-1. `full_finetune` dense smoke;
-2. `frozen_probe` smoke;
-3. zero-initialized `interaction_aligned channel_patch` with frozen backbone
-   and trainable adapter/head;
-4. validation-only `channel`, `patch`, and `channel_patch` screen.
+The following production conditions use the same resolved dataset manifest,
+scaling, classifier, split, batch size, and 50-epoch budget:
+
+- `full_finetune` dense: complete for seeds `42,1024,3407`;
+- `frozen_probe`: complete for seeds `42,1024,3407`;
+- generic bottleneck, LoRA QKV-r8, upper-2, and axis-blind controls: complete
+  for seeds `42,1024,3407`;
+- `native_full_finetune` channel, patch, and channel+patch: complete for
+  seeds `42,1024,3407`;
+- `interaction_aligned` channel, patch, and channel+patch: seed 42 is complete;
+  seeds `1024,3407` are the remaining six runs.
 
 The runner must produce strict checkpoint-load evidence (path, SHA-256,
 missing/unexpected keys and parameter counts), runtime geometry, trainability
 groups, per-epoch metrics, adapter gradients/update norms, validation-selected
 test metrics, per-class metrics, confusion matrix, timing, memory and a best
-model. Only after these gates pass should each condition enter the three-seed
-packet.
+model. Test metrics are retained for reporting but are never used to choose
+the recipe or checkpoint.
 
 ## Test evidence
 
@@ -139,11 +157,12 @@ checkpoint-dependent model smoke and training/test evaluation.
 
 ## Known limitations at this gate
 
-- The available seed-42 results are smoke-only and use one training batch and
-  one validation batch; they are not manuscript performance results.
-- No full production FACED run or multiseed result is available yet; the TMLR
-  protocol uses exactly three seeds only after the full single-seed contract is
-  accepted.
-- The reserved comparison controls and other datasets are intentionally out of
-  scope for this implementation gate.
+- The frozen-native seed-42 condition is weak under the lower exploratory
+  `adapter_lr=1e-4` setting; the remaining multiseed packet uses the stronger
+  tested `adapter_lr=5e-4` setting and must be interpreted separately from the
+  native full-backbone regime.
+- Native full-backbone adapters are a lightweight residual augmentation, not a
+  replacement for dense full fine-tuning; current FACED results are close to
+  but do not consistently exceed dense performance.
+- The TMLR protocol uses exactly three seeds: `42,1024,3407`.
 - This pipeline does not wire CBraMod to any LaBraM data/model code.
