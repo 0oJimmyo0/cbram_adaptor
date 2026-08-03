@@ -10,7 +10,7 @@ implementation or data-loader code.
 | Dataset | Backbone | Data/provenance gate | Baseline | Native adapter packet | Controls | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Frozen and full-backbone channel, patch, channel+patch; 3 seeds | Frozen probe, generic bottleneck, LoRA QKV-r8, upper-2, axis-blind; 3 seeds | **Complete** |
-| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Not yet production-complete | Frozen channel is primary; frozen patch is singleton-axis capacity control; full-backbone channel is secondary | Frozen generic, LoRA QKV-r8, upper-2, axis-blind after the primary gate | **Implementation gate passed; production runs pending** |
+| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Production matrix queued | Frozen channel is primary; frozen patch is singleton-axis capacity control; full-backbone channel is secondary | Frozen generic, LoRA QKV-r8, upper-2, axis-blind | **Smoke gates passed; 27 production runs queued** |
 
 ## SEED-V locked contract
 
@@ -25,6 +25,11 @@ implementation or data-loader code.
   `Linear(800) -> ELU/dropout -> Linear(200) -> ELU/dropout -> Linear(5)`.
 - Default training contract is batch `32`, `40` epochs, validation-kappa
   selection, test evaluation after selection, and seeds `{42,1024,3407}`.
+
+The one-GPU frozen-dense and frozen-channel smoke jobs completed with strict
+checkpoint reports and test artifacts. The production packet is queued as two
+serial `afterok` lanes, tails `12948315` and `12948330`, so no more than two
+SEED-V jobs can run concurrently.
 
 ## SEED-V interpretation boundary
 

@@ -49,3 +49,8 @@ the native adapter.
 
 The production status and exact remaining checklist are maintained in
 `docs/tmlr_status.md`.
+
+The two one-GPU smoke gates completed successfully (`12948289` frozen dense
+and `12948298` frozen channel). The 27-run production matrix is now queued in
+two serial `afterok` lanes (`12948315` and `12948330`); no production metric is
+claimed until those artifacts complete and pass the same integrity checks.
