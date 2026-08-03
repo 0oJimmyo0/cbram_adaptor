@@ -1,6 +1,6 @@
 #!/bin/bash
 # Queue the remaining frozen native FACED multiseed packet.
-# One sequential chain: at most one GPU is used by this packet.
+# Two independent per-seed chains: at most two GPUs are used by this packet.
 set -euo pipefail
 
 REPO_DIR="/data/neurogroup/mingyangjiang/EEGxPlore/CBraMod"
@@ -19,10 +19,16 @@ submit_next() {
     "$REPO_DIR/scripts/submit_faced_tmlr.slurm" | awk '{print $NF}'
 }
 
-previous=""
-for seed in 1024 3407; do
+queue_seed_chain() {
+  local seed="$1"
+  local previous=""
   previous=$(submit_next "$previous" channel "$seed" "faced_native_channel_s${seed}_adapterlr5e-4_b64_e50")
   previous=$(submit_next "$previous" patch "$seed" "faced_native_patch_s${seed}_adapterlr5e-4_b64_e50")
   previous=$(submit_next "$previous" channel_patch "$seed" "faced_native_channel_patch_s${seed}_adapterlr5e-4_b64_e50")
-done
-echo "native_frozen_multiseed_tail=${previous}"
+  echo "native_frozen_multiseed_s${seed}_tail=${previous}"
+}
+
+# Each seed starts independently, so two GPUs can execute the two heads while
+# preserving channel -> patch -> channel_patch order within each seed.
+queue_seed_chain 1024
+queue_seed_chain 3407
