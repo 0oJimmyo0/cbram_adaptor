@@ -29,7 +29,7 @@ from .provenance import (
     sha256_file,
     structure_spec,
 )
-from .trainability import apply_trainability_contract
+from .trainability import apply_trainability_contract, configure_training_modes
 
 
 def set_seed(seed: int) -> None:
@@ -420,6 +420,9 @@ def run(config: FacedTMLRConfig) -> Dict[str, Any]:
         "scheduler_eta_min": float(config.scheduler_eta_min),
         "groups": trainability["optimizer_groups"],
     })
+    writer.write_json("training_mode_report.json", configure_training_modes(
+        model, config.method, upper_k=config.upper_k,
+    ))
     if config.resume_from:
         resume_path = Path(config.resume_from).expanduser().resolve()
         if not resume_path.is_file():
@@ -441,7 +444,7 @@ def run(config: FacedTMLRConfig) -> Dict[str, Any]:
     started = time.time()
     for epoch in range(1, int(config.epochs) + 1):
         epoch_started = time.time()
-        model.train()
+        configure_training_modes(model, config.method, upper_k=config.upper_k)
         before = _snapshot(model)
         losses = []
         last_gradient_report: Dict[str, float] = {}

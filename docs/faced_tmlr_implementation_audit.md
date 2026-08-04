@@ -124,22 +124,38 @@ test metrics.
 
 ## Production checklist status
 
+### Frozen-mode correction
+
+The earlier FACED frozen packet is invalid for the intended deterministic
+frozen-backbone claim. Its epoch loop called `model.train()` on the complete
+model, enabling dropout inside the parameter-frozen CBraMod backbone. This is
+the same runner-level issue identified in SEED-V; it affects frozen probe,
+frozen native adapters, generic bottleneck, LoRA, and upper-block controls.
+
+The corrected runner now keeps the frozen base modules in `.eval()` mode and
+explicitly restores `.train()` mode for the classifier and trainable adapter,
+LoRA, or upper layers. Corrected artifacts include
+`training_mode_report.json`. Previous FACED frozen results remain available as
+historical diagnostics but must not be used in the manuscript. Dense and
+native full-backbone results are unaffected.
+
 The following production conditions use the same resolved dataset manifest,
 scaling, classifier, split, batch size, and 50-epoch budget:
 
 - `full_finetune` dense: complete for seeds `42,1024,3407`;
-- `frozen_probe`: complete for seeds `42,1024,3407`;
-- generic bottleneck, LoRA QKV-r8, upper-2, and axis-blind controls: complete
-  for seeds `42,1024,3407`;
+- `frozen_probe`: corrected packet pending for seeds `42,1024,3407`;
+- generic bottleneck, LoRA QKV-r8, upper-2, and axis-blind controls: corrected
+  packets pending for seeds `42,1024,3407`;
 - `native_full_finetune` channel, patch, and channel+patch: complete for
   seeds `42,1024,3407`;
 - `interaction_aligned` channel, patch, and channel+patch: complete for seeds
   `42,1024,3407` using the promoted `adapter_lr=5e-4` contract. The exploratory
   seed-42 `adapter_lr=1e-4` packet is retained separately.
 
-The final frozen-native test BA means are channel `0.2730`, patch `0.3141`,
-and channel+patch `0.3303`. These are conditional frozen-backbone results,
-not replacements for dense fine-tuning.
+The previously reported frozen-native test BA means are historical diagnostics
+only and are superseded by the corrected eval-mode packet. Corrected results
+will be reported as conditional frozen-backbone results, not replacements for
+dense fine-tuning.
 
 The runner must produce strict checkpoint-load evidence (path, SHA-256,
 missing/unexpected keys and parameter counts), runtime geometry, trainability

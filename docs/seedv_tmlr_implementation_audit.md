@@ -50,6 +50,24 @@ the native adapter.
 The production status and exact remaining checklist are maintained in
 `docs/tmlr_status.md`.
 
+## Frozen-backbone correction
+
+The first SEED-V frozen packet is invalid for the intended deterministic
+frozen-backbone claim. The training loop called `model.train()` each epoch,
+which enabled dropout in CBraMod's frozen spectral projection and encoder.
+The artifact trainability reports correctly show zero base-backbone updates,
+but they do not make a module with active dropout a deterministic feature
+extractor. A direct repeated-forward check produced different frozen features
+in train mode and identical features in eval mode.
+
+The runner now uses `configure_training_modes`: the frozen base stays in
+`.eval()`, while the classifier and trainable native adapter remain in
+`.train()`. Corrected artifacts include `training_mode_report.json`. The
+previous frozen dense/channel/patch/control results, including the exploratory
+low-adapter-LR channel run, are retained only as failure diagnostics. They are
+not final SEED-V manuscript results. The corrected seed-42 gate must complete
+before the three-seed frozen packet is promoted.
+
 The two one-GPU smoke gates completed successfully (`12948289` frozen dense
 and `12948298` frozen channel). The 27-run production matrix is now queued in
 two serial `afterok` lanes (`12948315` and `12948330`); no production metric is

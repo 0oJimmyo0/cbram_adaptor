@@ -9,6 +9,16 @@ import torch
 from .config import ADAPTER_TYPES, RESERVED_METHODS, SUPPORTED_METHODS
 
 
+FROZEN_BASE_METHODS = {
+    "frozen_probe",
+    "interaction_aligned",
+    "generic_bottleneck",
+    "lora",
+    "upper_k_finetune",
+    "axis_blind",
+}
+
+
 def _component(name: str) -> str:
     if ".lora_A" in name or ".lora_B" in name:
         return "lora"
@@ -154,6 +164,91 @@ def apply_trainability_contract(
     }
     _assert_contract(model, report)
     return groups, report
+
+
+def configure_training_modes(
+    model: torch.nn.Module,
+    method: str,
+    upper_k: int = 2,
+) -> Dict[str, Any]:
+    """Set module modes consistently with the explicit trainability contract.
+
+    ``model.train()`` alone is incorrect for PEFT methods: it also enables
+    dropout inside the parameter-frozen backbone.  Frozen-base methods keep
+    the base backbone in evaluation mode while explicitly training the
+    attached adapter/LoRA/upper-block components and the classifier.
+    """
+    method = str(method).strip().lower()
+    model.train()
+    backbone = getattr(model, "backbone", None)
+    classifier = getattr(model, "classifier", None)
+    if backbone is None or classifier is None:
+        raise AssertionError("Training-mode controller requires model.backbone and model.classifier")
+
+    if method not in FROZEN_BASE_METHODS:
+        if method not in {"full_finetune", "native_full_finetune"}:
+            raise ValueError(f"Unsupported training-mode method {method!r}")
+        return {
+            "method": method,
+            "frozen_backbone_eval_mode": False,
+            "model_training": bool(model.training),
+            "backbone_training": bool(backbone.training),
+            "classifier_training": bool(classifier.training),
+            "native_adapter_training": bool(
+                getattr(backbone, "native_axis_adapter", None) is not None
+                and backbone.native_axis_adapter.training
+            ),
+            "generic_adapter_training": bool(
+                getattr(backbone, "generic_adapter", None) is not None
+                and backbone.generic_adapter.training
+            ),
+            "lora_module_count": 0,
+            "upper_trainable_layer_count": 0,
+        }
+
+    # Freeze behavior includes inference-mode dropout for the base feature
+    # extractor.  Trainable children are explicitly restored below.
+    backbone.eval()
+    native_adapter = getattr(backbone, "native_axis_adapter", None)
+    generic_adapter = getattr(backbone, "generic_adapter", None)
+    lora_modules = []
+    upper_layers = []
+
+    if method == "interaction_aligned":
+        if native_adapter is None:
+            raise AssertionError("interaction_aligned requires a native adapter")
+        native_adapter.train()
+    elif method in {"generic_bottleneck", "axis_blind"}:
+        if generic_adapter is None:
+            raise AssertionError(f"{method} requires a generic adapter")
+        generic_adapter.train()
+    elif method == "lora":
+        for module in backbone.modules():
+            if hasattr(module, "lora_A") and hasattr(module, "lora_B"):
+                module.train()
+                lora_modules.append(module)
+    elif method == "upper_k_finetune":
+        layers = getattr(getattr(backbone, "encoder", None), "layers", None)
+        if layers is None or int(upper_k) <= 0 or int(upper_k) > len(layers):
+            raise ValueError(f"upper_k={upper_k} is incompatible with the backbone")
+        upper_layers = list(layers)[-int(upper_k):]
+        for layer in upper_layers:
+            layer.train()
+
+    # ``backbone.eval()`` does not affect this sibling module, but make the
+    # intended classifier mode explicit for the artifact and future changes.
+    classifier.train()
+    return {
+        "method": method,
+        "frozen_backbone_eval_mode": True,
+        "model_training": bool(model.training),
+        "backbone_training": bool(backbone.training),
+        "classifier_training": bool(classifier.training),
+        "native_adapter_training": bool(native_adapter is not None and native_adapter.training),
+        "generic_adapter_training": bool(generic_adapter is not None and generic_adapter.training),
+        "lora_module_count": len(lora_modules),
+        "upper_trainable_layer_count": len(upper_layers),
+    }
 
 
 def _assert_contract(model: torch.nn.Module, report: Dict[str, Any]) -> None:

@@ -9,8 +9,8 @@ implementation or data-loader code.
 
 | Dataset | Backbone | Data/provenance gate | Baseline | Native adapter packet | Controls | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Frozen and full-backbone channel, patch, channel+patch; 3 seeds | Frozen probe, generic bottleneck, LoRA QKV-r8, upper-2, axis-blind; 3 seeds | **Complete** |
-| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Production matrix queued | Frozen channel is primary; frozen patch is singleton-axis capacity control; full-backbone channel is secondary | Frozen generic, LoRA QKV-r8, upper-2, axis-blind | **Smoke gates passed; 27 production runs queued** |
+| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Full-backbone packet remains valid; frozen packet must be rerun with eval-mode controller | Frozen probe, generic bottleneck, LoRA QKV-r8, upper-2, axis-blind must be rerun | **Frozen packet invalidated; corrected rerun queued** |
+| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Full-backbone channel remains valid; frozen channel/patch must be rerun with eval-mode controller | Frozen generic, LoRA QKV-r8, upper-2, axis-blind must be rerun | **Frozen packet invalidated; corrected rerun queued** |
 
 ## SEED-V locked contract
 
@@ -26,10 +26,10 @@ implementation or data-loader code.
 - Default training contract is batch `32`, `40` epochs, validation-kappa
   selection, test evaluation after selection, and seeds `{42,1024,3407}`.
 
-The one-GPU frozen-dense and frozen-channel smoke jobs completed with strict
-checkpoint reports and test artifacts. The production packet is queued as two
-serial `afterok` lanes, tails `12948315` and `12948330`, so no more than two
-SEED-V jobs can run concurrently.
+The original frozen production packet is not manuscript-eligible because the
+pre-correction loop enabled dropout in the parameter-frozen backbone. Corrected
+jobs write `training_mode_report.json` and are queued in serial lanes with no
+more than two SEED-V jobs concurrently.
 
 ## SEED-V interpretation boundary
 
@@ -41,12 +41,32 @@ interaction. The primary CBraMod SEED-V claim is frozen dense versus frozen
 channel adapter under the same classifier, split, scaling, checkpoint, seed,
 selection, and test protocol used for the matched LaBraM study.
 
+The corrected contract also requires the frozen CBraMod base modules to remain
+in `.eval()` mode while the classifier and any trainable adapter remain in
+`.train()` mode.
+
+## Frozen-mode correction (2026-08-04)
+
+The earlier CBraMod frozen runs on FACED and SEED-V called `model.train()` at
+the start of each epoch. CBraMod has dropout in its spectral projection and
+encoder blocks, so this made the supposedly frozen representation stochastic.
+The parameter `requires_grad=False` reports were correct, but the module-mode
+contract was not. Those frozen results are retained as diagnostics only and
+must not be used as final manuscript evidence.
+
+`tmlr.trainability.configure_training_modes` now enforces the intended modes:
+the frozen base is in evaluation mode, while the classifier and trainable
+native adapter, generic adapter, LoRA factors, or selected upper layers are in
+training mode. Every corrected run records this in
+`training_mode_report.json`. Dense full-finetuning and native full-backbone
+runs are unaffected because their backbones should remain in training mode.
+
 ## Production checklist
 
-1. Complete one-GPU frozen-dense and frozen-channel smoke checks with strict
-   checkpoint and trainability reports.
-2. Run frozen dense and frozen channel for seeds `42,1024,3407`.
-3. Run the prespecified frozen patch singleton control for the same three
+1. Complete corrected seed-42 frozen-dense and frozen-channel gates with strict
+   checkpoint, trainability, and training-mode reports.
+2. Run corrected frozen dense and frozen channel for seeds `42,1024,3407`.
+3. Run the corrected prespecified frozen patch singleton control for the same three
    seeds, clearly labeled as a capacity control.
 4. Run native full-backbone channel for the same three seeds as the secondary
    trainable-backbone regime.
@@ -56,6 +76,7 @@ selection, and test protocol used for the matched LaBraM study.
    test BA/kappa/F1, strict checkpoint report, trainability report, geometry,
    adapter/update diagnostics, and no test-based selection.
 
-No SEED-V multiseed result is interpreted until the single-seed production
-gate is technically clean. Exactly three seeds are used; five-seed packets
-are not part of this study.
+No corrected SEED-V multiseed result is interpreted until the seed-42 mode gate
+is technically clean. Exactly three seeds are used; five-seed packets are not
+part of this study. Historical pre-correction frozen artifacts must not be
+substituted for the corrected runs when the datasets are revisited.

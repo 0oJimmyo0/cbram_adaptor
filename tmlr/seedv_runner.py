@@ -36,7 +36,7 @@ from tmlr.faced_runner import (
 )
 from tmlr.metrics import evaluate_model, selection_value
 from tmlr.provenance import collect_environment, sha256_file
-from tmlr.trainability import apply_trainability_contract
+from tmlr.trainability import apply_trainability_contract, configure_training_modes
 
 
 EXPECTED_SHAPE = (62, 1, 200)
@@ -301,6 +301,9 @@ def run(config) -> Dict[str, Any]:
         "betas": [0.9, 0.999], "eps": 1e-8,
         "groups": trainability["optimizer_groups"],
     })
+    writer.write_json("training_mode_report.json", configure_training_modes(
+        model, config.method, upper_k=config.upper_k,
+    ))
     criterion = nn.CrossEntropyLoss(label_smoothing=float(config.label_smoothing)).to(device)
     print(f"[seedv] optimizer and criterion ready on {device}; entering training", flush=True)
     best_score, best_epoch, best_record = float("-inf"), 0, None
@@ -308,7 +311,7 @@ def run(config) -> Dict[str, Any]:
     started = time.time()
     for epoch in range(1, int(config.epochs) + 1):
         epoch_start = time.time()
-        model.train()
+        configure_training_modes(model, config.method, upper_k=config.upper_k)
         before = _snapshot(model)
         losses, last_grad = [], {}
         for batch_index, (inputs, labels) in enumerate(loaders["train"]):

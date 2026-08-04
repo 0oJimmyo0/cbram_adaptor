@@ -81,6 +81,12 @@ The native adapter has two distinct trainability regimes:
 - `native_full_finetune`: trainable CBraMod plus the same native adapter and
   classifier.
 
+For every frozen-base regime, the training-mode contract is distinct from the
+parameter contract: the base CBraMod modules remain in `.eval()` mode so their
+dropout is disabled, while the classifier and trainable adapter remain in
+`.train()` mode. This is recorded in `training_mode_report.json` and is
+required before interpreting frozen-backbone results.
+
 The second regime is a complement to, not a replacement for, dense
 fine-tuning. It tests whether the native residual adds value when the backbone
 is allowed to move. The two regimes must not be pooled into one headline.
