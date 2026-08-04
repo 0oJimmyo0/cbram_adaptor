@@ -9,8 +9,8 @@ implementation or data-loader code.
 
 | Dataset | Backbone | Data/provenance gate | Baseline | Native adapter packet | Controls | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Full-backbone packet remains valid; frozen packet must be rerun with eval-mode controller | Frozen probe, generic bottleneck, LoRA QKV-r8, upper-2, axis-blind must be rerun | **Frozen packet invalidated; corrected rerun queued** |
-| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Full-backbone channel remains valid; frozen channel/patch must be rerun with eval-mode controller | Frozen generic, LoRA QKV-r8, upper-2, axis-blind must be rerun | **Frozen packet invalidated; corrected rerun queued** |
+| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Full-backbone packet remains valid; corrected frozen packet 22/24 complete | Corrected frozen controls 22/24 complete | **Corrected packet in progress; 2 jobs remain** |
+| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Corrected frozen channel/dense/patch packet 13/21 complete | Corrected frozen controls 13/21 complete | **Corrected packet in progress; 8 jobs remain** |
 
 ## SEED-V locked contract
 
@@ -29,8 +29,8 @@ implementation or data-loader code.
 The original frozen production packet is not manuscript-eligible because the
 pre-correction loop enabled dropout in the parameter-frozen backbone. Corrected
 jobs write `training_mode_report.json` and are queued in serial lanes with no
-more than two SEED-V jobs concurrently. The corrected packet heads are
-SEED-V `12969503` and FACED `12969524`; tails are `12969523` and `12969547`.
+more than two jobs concurrently. The corrected packet heads are SEED-V
+`12969503` and FACED `12969524`; tails are `12969523` and `12969547`.
 
 ## SEED-V interpretation boundary
 
@@ -81,3 +81,21 @@ No corrected SEED-V multiseed result is interpreted until the seed-42 mode gate
 is technically clean. Exactly three seeds are used; five-seed packets are not
 part of this study. Historical pre-correction frozen artifacts must not be
 substituted for the corrected runs when the datasets are revisited.
+
+## Dataset-transition gate
+
+Before moving to another dataset, the current dataset must satisfy all of the
+following:
+
+1. Every frozen-base method uses the shared mode controller and writes
+   `training_mode_report.json` with `frozen_backbone_eval_mode=true`, base
+   backbone training mode false, and trainable head/adapter mode true.
+2. Every required condition has exactly seeds `42,1024,3407`; no historical
+   pre-correction artifact substitutes for a corrected result.
+3. Every completed artifact has strict checkpoint loading, correct geometry,
+   trainability/optimizer reports, all expected epoch records, validation
+   selection, test metrics, and adapter/update diagnostics.
+4. `sacct` shows no failed or `DependencyNeverSatisfied` production job, and
+   no condition is silently missing from the checklist.
+5. Only after this audit is the dataset marked complete and the next dataset
+   launched.
