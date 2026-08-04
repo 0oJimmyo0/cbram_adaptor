@@ -122,3 +122,35 @@ two lanes permit at most two simultaneous A6000 jobs.
 These are comparison gates against the existing corrected `r=64` seed-42
 artifacts, not multiseed production runs. Cancelled obsolete jobs were
 `12969522`, `12969523`, and `12981365–12981367`.
+
+## 2026-08-05 r=32 gate results
+
+The corrected queue and r=32 gate are complete. All 22 relevant SEED-V
+artifacts (21 corrected r=64 packet conditions plus one r=32 seed-42 gate) and
+26 FACED artifacts (24 corrected r=64 packet conditions plus two r=32 seed-42
+gates) contain complete epoch logs, strict checkpoint reports,
+`training_mode_report.json`, and test metrics.
+
+The FACED r=32 gate is a fair comparison because both r=32 and corrected r=64
+native runs use adapter LR `5e-4`:
+
+- channel: r=32 test BA `0.3733` versus r=64 `0.3837`;
+- channel+patch: r=32 test BA `0.3875` versus r=64 `0.3952`.
+
+Both r=32 variants are technically valid but less effective than r=64 on this
+seed. The r=32 channel+patch variant still exceeds the frozen probe on seed
+42, but it does not justify replacing the completed r=64 packet.
+
+The SEED-V r=32 gate is technically valid but not a fair architecture-only
+comparison: it uses adapter LR `1e-4`, whereas the corrected r=64 channel
+packet uses `1e-5`. It reaches test BA `0.2915`, slightly above r=64 channel
+`0.2882`, but remains below corrected frozen dense `0.2989`; its larger
+residual ratio also reflects the tenfold LR difference. No r=32 multiseed
+claim may be made from this result.
+
+Remaining SEED-V task: run one seed-42 r=32 channel confirmation with the
+locked adapter LR `1e-5`. If it does not show a meaningful improvement over
+the corrected r=64 channel and frozen dense baselines, close SEED-V with the
+corrected r=64 three-seed packet and do not run r=32 multiseeds. If it does
+show a meaningful seed-42 improvement, then run exactly `{42,1024,3407}` for
+r=32; never use five seeds.

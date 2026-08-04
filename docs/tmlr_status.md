@@ -9,8 +9,8 @@ implementation or data-loader code.
 
 | Dataset | Backbone | Data/provenance gate | Baseline | Native adapter packet | Controls | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Full-backbone packet remains valid; corrected frozen packet 24/24 complete | Corrected frozen controls 24/24 complete | **Corrected packet complete; final artifact audit remains** |
-| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Corrected frozen channel/dense/patch packet 14/21 complete | Corrected frozen controls 14/21 complete | **Corrected packet in progress; 7 jobs remain (1 running, 6 pending)** |
+| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Corrected frozen packet 24/24 complete; r=32 seed-42 gate complete | Corrected frozen controls 24/24 complete | **Packet complete; r=64 retained as operational setting** |
+| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Corrected frozen packet 21/21 complete; r=32 seed-42 gate technically complete but LR-confounded | Corrected frozen controls 21/21 complete | **One fair r=32 seed-42 LR confirmation remains** |
 
 ## SEED-V locked contract
 
@@ -100,6 +100,11 @@ following:
 5. Only after this audit is the dataset marked complete and the next dataset
    launched.
 
+For SEED-V specifically, the corrected r=64 packet is complete. The only
+remaining adapter-setting gate is one seed-42 r=32 channel run at adapter LR
+`1e-5`; no r=32 multiseed packet should start before comparison with
+corrected frozen dense and r=64 channel.
+
 ## Adapter audit gate before final cross-backbone aggregation
 
 The current corrected packet is an operational `r=64` CBraMod bottleneck
@@ -115,12 +120,8 @@ completed three-seed packet as a different architecture. The final paper must
 also describe the CBraMod halves as architecturally defined native branches,
 not pure semantic feature halves.
 
-The final corrected seed-3407 controls were split into jobs `12982900` and
-`12982901`; `12982900` is now dependency-free and `12982901` remains after
-the currently running `12969521`. `12982900` completed successfully, and the
-FACED r=32 channel job `12982902` was released to use the second GPU while
-`12982901` runs. The seed-42 `r=32`
-gate is then queued as `12982902–12982904`, after both controls succeed. It
-contains FACED channel, FACED channel+patch, and SEED-V channel; it is
-intentionally single-seed and must be interpreted against the existing
-corrected `r=64` logs before any multiseed decision.
+The final corrected seed-3407 controls completed as jobs `12982900` and
+`12982901`. The seed-42 r=32 gate then completed as `12982902–12982904`, with
+FACED channel, FACED channel+patch, and SEED-V channel. It was intentionally
+single-seed and is interpreted against the existing corrected r=64 logs before
+any multiseed decision.
