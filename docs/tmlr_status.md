@@ -10,7 +10,7 @@ implementation or data-loader code.
 | Dataset | Backbone | Data/provenance gate | Baseline | Native adapter packet | Controls | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Corrected frozen packet 24/24 complete; r=32 seed-42 gate complete | Corrected frozen controls 24/24 complete | **Packet complete; r=64 retained as operational setting** |
-| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Corrected frozen packet 21/21 complete; r=32 seed-42 gate technically complete but LR-confounded | Corrected frozen controls 21/21 complete | **One fair r=32 seed-42 LR confirmation remains** |
+| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds | Corrected frozen packet 21/21 complete; r=32 diagnostic gate complete | Corrected frozen controls 21/21 complete | **Complete; r=64 locked** |
 
 ## SEED-V locked contract
 
@@ -100,10 +100,10 @@ following:
 5. Only after this audit is the dataset marked complete and the next dataset
    launched.
 
-For SEED-V specifically, the corrected r=64 packet is complete. The only
-remaining adapter-setting gate is one seed-42 r=32 channel run at adapter LR
-`1e-5`; no r=32 multiseed packet should start before comparison with
-corrected frozen dense and r=64 channel.
+For SEED-V specifically, the corrected r=64 packet is complete. The r=32
+single-seed gate is retained as a diagnostic because its adapter LR differed
+from the r=64 channel packet; it is not promoted to a production setting and
+will not receive multiseeds.
 
 ## Adapter audit gate before final cross-backbone aggregation
 

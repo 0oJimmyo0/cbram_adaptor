@@ -148,9 +148,7 @@ packet uses `1e-5`. It reaches test BA `0.2915`, slightly above r=64 channel
 residual ratio also reflects the tenfold LR difference. No r=32 multiseed
 claim may be made from this result.
 
-Remaining SEED-V task: run one seed-42 r=32 channel confirmation with the
-locked adapter LR `1e-5`. If it does not show a meaningful improvement over
-the corrected r=64 channel and frozen dense baselines, close SEED-V with the
-corrected r=64 three-seed packet and do not run r=32 multiseeds. If it does
-show a meaningful seed-42 improvement, then run exactly `{42,1024,3407}` for
-r=32; never use five seeds.
+The operational bottleneck is now locked at r=64. The r=32 results are
+diagnostic-only and no r=32 multiseed packet will be run. Both SEED-V and
+FACED have completed all required r=64 three-seed conditions; remaining work
+is cross-backbone aggregation, final artifact audit, and manuscript analysis.
