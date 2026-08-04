@@ -115,8 +115,9 @@ completed three-seed packet as a different architecture. The final paper must
 also describe the CBraMod halves as architecturally defined native branches,
 not pure semantic feature halves.
 
-The seed-42 `r=32` gate is queued as jobs `12981365–12981367`, after the
-corrected packet tail `12969523`. It contains FACED channel, FACED
-channel+patch, and SEED-V channel; it is intentionally single-seed and must be
-interpreted against the existing corrected `r=64` logs before any multiseed
-decision.
+The final corrected seed-3407 controls were split into jobs `12982900` and
+`12982901`, both after the currently running `12969521`. The seed-42 `r=32`
+gate is then queued as `12982902–12982904`, after both controls succeed. It
+contains FACED channel, FACED channel+patch, and SEED-V channel; it is
+intentionally single-seed and must be interpreted against the existing
+corrected `r=64` logs before any multiseed decision.

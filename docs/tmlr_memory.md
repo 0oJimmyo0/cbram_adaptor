@@ -101,13 +101,19 @@ already submitted corrected packet. The bottleneck, initialization, and
 diagnostic-schema gates are deliberately deferred until that packet is
 complete so completed and pending jobs are not scientifically mixed.
 
-The first bottleneck gate was queued without multiseeds on 2026-08-05:
+The first bottleneck gate was queued without multiseeds on 2026-08-05. The
+initial serial chain was cancelled after inspection showed it would leave
+available GPUs idle. The corrected split queue is:
 
-- `12981365`: FACED native channel, `r=32`, seed 42;
-- `12981366`: FACED native channel+patch, `r=32`, seed 42, serially after
-  `12981365`;
-- `12981367`: SEED-V native channel, `r=32`, seed 42.
+- `12982900`: corrected SEED-V upper-2, seed 3407;
+- `12982901`: corrected SEED-V axis-blind, seed 3407, parallel after the
+  currently running `12969521`;
+- `12982902 -> 12982903`: FACED native channel then channel+patch, `r=32`,
+  seed 42;
+- `12982904`: SEED-V native channel, `r=32`, seed 42.
 
-All three depend on corrected SEED-V tail `12969523`; the two lanes permit at
-most two simultaneous A6000 jobs. These are comparison gates against the
-existing corrected `r=64` seed-42 artifacts, not multiseed production runs.
+The two corrected controls run concurrently, then the r=32 gate starts only
+after both succeed. The two lanes permit at most two simultaneous A6000 jobs.
+These are comparison gates against the existing corrected `r=64` seed-42
+artifacts, not multiseed production runs. Cancelled obsolete jobs were
+`12969522`, `12969523`, and `12981365–12981367`.
