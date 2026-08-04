@@ -110,11 +110,15 @@ available GPUs idle. The corrected split queue is:
 - `12982901`: corrected SEED-V axis-blind, seed 3407, after the currently
   running `12969521`;
 - `12982902 -> 12982903`: FACED native channel then channel+patch, `r=32`,
-  seed 42;
+  seed 42; `12982902` was released from dependency once the independent
+  upper-2 control completed, so it can use the second GPU while
+  `12982901` runs;
 - `12982904`: SEED-V native channel, `r=32`, seed 42.
 
-The two corrected controls run concurrently, then the r=32 gate starts only
-after both succeed. The two lanes permit at most two simultaneous A6000 jobs.
+The two corrected controls were initially split for concurrency. The FACED
+r=32 channel gate is also independent of the axis-blind result and was
+released once `12982900` completed, so it can run alongside `12982901`. The
+two lanes permit at most two simultaneous A6000 jobs.
 These are comparison gates against the existing corrected `r=64` seed-42
 artifacts, not multiseed production runs. Cancelled obsolete jobs were
 `12969522`, `12969523`, and `12981365–12981367`.
