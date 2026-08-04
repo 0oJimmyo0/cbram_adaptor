@@ -22,6 +22,7 @@ METHOD="${METHOD:-}"
 ADAPTER_TYPE="${ADAPTER_TYPE:-}"
 ADAPTER_SEED="${ADAPTER_SEED:-}"
 ADAPTER_LR="${ADAPTER_LR:-}"
+ADAPTER_BOTTLENECK="${ADAPTER_BOTTLENECK:-}"
 RUN_ID="${RUN_ID:-faced_cbramod_${METHOD:-full_finetune}_${ADAPTER_TYPE:-none}_s${SEED}_lr${LR}_b${BATCH_SIZE}_e${EPOCHS}}"
 DEVICE="${DEVICE:-cuda}"
 
@@ -35,6 +36,7 @@ echo "Activated Python: $(command -v python)" >&2
 cd "$REPO_DIR"
 
 echo "CBraMod FACED launch: config=$CONFIG method=${METHOD:-from_config} adapter=${ADAPTER_TYPE:-none} seed=$SEED lr=$LR batch=$BATCH_SIZE epochs=$EPOCHS run_id=$RUN_ID" >&2
+echo "adapter_bottleneck=${ADAPTER_BOTTLENECK:-from_config}" >&2
 echo "git_commit: $(git rev-parse HEAD)" >&2
 echo "checkpoint_sha256: $(sha256sum /data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth | awk '{print $1}')" >&2
 python - <<'PY'
@@ -67,6 +69,7 @@ if [[ -n "$METHOD" ]]; then RUN_ARGS+=(--method "$METHOD"); fi
 if [[ -n "$ADAPTER_TYPE" ]]; then RUN_ARGS+=(--adapter-type "$ADAPTER_TYPE"); fi
 if [[ -n "$ADAPTER_SEED" ]]; then RUN_ARGS+=(--adapter-seed "$ADAPTER_SEED"); fi
 if [[ -n "$ADAPTER_LR" ]]; then RUN_ARGS+=(--adapter-lr "$ADAPTER_LR"); fi
+if [[ -n "$ADAPTER_BOTTLENECK" ]]; then RUN_ARGS+=(--adapter-bottleneck "$ADAPTER_BOTTLENECK"); fi
 
 OMP_NUM_THREADS=1 python -u run_faced_tmlr.py \
   "${RUN_ARGS[@]}"

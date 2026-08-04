@@ -100,3 +100,14 @@ These changes do not change the architecture or optimizer numerics of the
 already submitted corrected packet. The bottleneck, initialization, and
 diagnostic-schema gates are deliberately deferred until that packet is
 complete so completed and pending jobs are not scientifically mixed.
+
+The first bottleneck gate was queued without multiseeds on 2026-08-05:
+
+- `12981365`: FACED native channel, `r=32`, seed 42;
+- `12981366`: FACED native channel+patch, `r=32`, seed 42, serially after
+  `12981365`;
+- `12981367`: SEED-V native channel, `r=32`, seed 42.
+
+All three depend on corrected SEED-V tail `12969523`; the two lanes permit at
+most two simultaneous A6000 jobs. These are comparison gates against the
+existing corrected `r=64` seed-42 artifacts, not multiseed production runs.
