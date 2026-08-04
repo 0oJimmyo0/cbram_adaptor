@@ -9,8 +9,8 @@ implementation or data-loader code.
 
 | Dataset | Backbone | Data/provenance gate | Baseline | Native adapter packet | Controls | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Full-backbone packet remains valid; corrected frozen packet 22/24 complete | Corrected frozen controls 22/24 complete | **Corrected packet in progress; 2 jobs remain** |
-| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Corrected frozen channel/dense/patch packet 13/21 complete | Corrected frozen controls 13/21 complete | **Corrected packet in progress; 8 jobs remain** |
+| FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Full-backbone packet remains valid; corrected frozen packet 24/24 complete | Corrected frozen controls 24/24 complete | **Corrected packet complete; final artifact audit remains** |
+| SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds remains valid | Corrected frozen channel/dense/patch packet 14/21 complete | Corrected frozen controls 14/21 complete | **Corrected packet in progress; 7 jobs remain (1 running, 6 pending)** |
 
 ## SEED-V locked contract
 
@@ -99,3 +99,18 @@ following:
    no condition is silently missing from the checklist.
 5. Only after this audit is the dataset marked complete and the next dataset
    launched.
+
+## Adapter audit gate before final cross-backbone aggregation
+
+The current corrected packet is an operational `r=64` CBraMod bottleneck
+packet. Before final TMLR aggregation, run and archive seed-42 gates for:
+
+- CBraMod `r=64` versus `r=32` native branches;
+- an explicit shared initialization policy, mirrored independently in the
+  LaBraM repository;
+- schema-v2 branch/full-grid residual and Q/K/V diagnostics.
+
+These are refinement/fidelity gates, not reasons to reinterpret the current
+completed three-seed packet as a different architecture. The final paper must
+also describe the CBraMod halves as architecturally defined native branches,
+not pure semantic feature halves.

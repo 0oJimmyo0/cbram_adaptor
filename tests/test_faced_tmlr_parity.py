@@ -62,8 +62,16 @@ def test_first_and_second_backward_contract(adapter_type):
     first = model.backbone.get_adapter_diagnostics()
     if adapter_type in {"channel", "channel_patch"}:
         assert first["channel_up_grad_norm"] > 0.0
+        assert first["channel_q_grad_norm"] <= 1e-12
+        assert first["channel_k_grad_norm"] <= 1e-12
+        assert first["channel_v_grad_norm"] <= 1e-12
+        assert first["channel_down_grad_norm"] <= 1e-12
     if adapter_type in {"patch", "channel_patch"}:
         assert first["patch_up_grad_norm"] > 0.0
+        assert first["patch_q_grad_norm"] <= 1e-12
+        assert first["patch_k_grad_norm"] <= 1e-12
+        assert first["patch_v_grad_norm"] <= 1e-12
+        assert first["patch_down_grad_norm"] <= 1e-12
     if adapter_type == "channel":
         assert "patch_q_grad_norm" not in first
     if adapter_type == "patch":
@@ -83,10 +91,12 @@ def test_first_and_second_backward_contract(adapter_type):
         assert second["channel_q_grad_norm"] > 0.0
         assert second["channel_k_grad_norm"] > 0.0
         assert second["channel_v_grad_norm"] > 0.0
+        assert second["channel_down_grad_norm"] > 0.0
     if adapter_type in {"patch", "channel_patch"}:
         assert second["patch_q_grad_norm"] > 0.0
         assert second["patch_k_grad_norm"] > 0.0
         assert second["patch_v_grad_norm"] > 0.0
+        assert second["patch_down_grad_norm"] > 0.0
     optimizer.step()
     for name, previous in frozen_before.items():
         assert torch.equal(previous, dict(model.named_parameters())[name].detach())
@@ -102,3 +112,14 @@ def test_strict_checkpoint_load_precedes_adapter_attachment(tmp_path: Path):
     assert report.unexpected_keys == []
     loaded.enable_interaction_adapter("channel_patch", bottleneck=8, num_heads=2)
     assert loaded.native_axis_adapter is not None
+
+
+def test_adapter_attachment_is_device_safe_and_not_repeatable():
+    model = CBraMod(
+        in_dim=200, out_dim=200, d_model=200, dim_feedforward=400,
+        seq_len=10, n_layer=1, nhead=4,
+    ).to(dtype=torch.float64)
+    model.enable_interaction_adapter("channel", bottleneck=8, num_heads=2)
+    assert next(model.native_axis_adapter.parameters()).dtype == torch.float64
+    with pytest.raises(RuntimeError, match="Only one CBraMod adaptation family"):
+        model.enable_interaction_adapter("patch", bottleneck=8, num_heads=2)

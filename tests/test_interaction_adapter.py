@@ -78,6 +78,39 @@ def test_ineligible_axis_is_rejected():
         raise AssertionError("degenerate patch axis was accepted")
 
 
+@torch.no_grad()
+def test_native_branches_are_isolated_and_axis_equivariant():
+    samples = torch.randn(2, 4, 3, 200)
+    channel = build(adapter_type="channel", zero_init_output=False).eval()
+    patch = build(adapter_type="patch", zero_init_output=False).eval()
+
+    channel_delta = channel.native_axis_adapter(samples)
+    patch_delta = patch.native_axis_adapter(samples)
+    assert torch.equal(channel_delta[..., 100:], torch.zeros_like(channel_delta[..., 100:]))
+    assert torch.equal(patch_delta[..., :100], torch.zeros_like(patch_delta[..., :100]))
+
+    channel_permutation = torch.tensor([2, 0, 3, 1])
+    channel_permuted = channel.native_axis_adapter(samples[:, channel_permutation])
+    assert torch.allclose(channel_permuted, channel_delta[:, channel_permutation], atol=1e-6, rtol=0.0)
+
+    patch_permutation = torch.tensor([2, 0, 1])
+    patch_permuted = patch.native_axis_adapter(samples[:, :, patch_permutation])
+    assert torch.allclose(patch_permuted, patch_delta[:, :, patch_permutation], atol=1e-6, rtol=0.0)
+
+    opposite_channel = samples.clone()
+    opposite_channel[..., 100:] = torch.randn_like(opposite_channel[..., 100:])
+    assert torch.allclose(
+        channel.native_axis_adapter(opposite_channel)[..., :100],
+        channel_delta[..., :100], atol=1e-6, rtol=0.0,
+    )
+    opposite_patch = samples.clone()
+    opposite_patch[..., :100] = torch.randn_like(opposite_patch[..., :100])
+    assert torch.allclose(
+        patch.native_axis_adapter(opposite_patch)[..., 100:],
+        patch_delta[..., 100:], atol=1e-6, rtol=0.0,
+    )
+
+
 if __name__ == "__main__":
     test_zero_init_dense_parity()
     test_native_geometry_and_gradients()

@@ -40,14 +40,14 @@ evidence.
 
 ## 2026-08-05 corrected packet progress
 
-The corrected frozen queue is technically clean so far. Of 45 jobs, 35 have
+The corrected frozen queue is technically clean so far. Of 45 jobs, 38 have
 completed with valid `training_mode_report.json`, strict checkpoint reports,
 complete epoch/test artifacts, and no integrity failures:
 
-- FACED: 22/24 complete; job `12969546` (upper-2, seed 3407) is running and
-  `12969547` (axis-blind, seed 3407) is pending.
-- SEED-V: 13/21 complete; job `12969516` (axis-blind, seed 1024) is running
-  and jobs `12969517–12969523` (all seed-3407 frozen conditions) are pending.
+- FACED: 24/24 complete; accounting shows all jobs completed with exit code
+  zero.
+- SEED-V: 14/21 complete; job `12969517` is running and jobs
+  `12969518–12969523` remain pending in the serial dependency lane.
 
 Early corrected results already show the mode fix matters. On SEED-V,
 frozen-dense test BA is about `0.299` for seeds 42 and 1024, versus roughly
@@ -61,3 +61,42 @@ The dataset-transition rule is now mandatory: do not move to another dataset
 until the current dataset has all required three-seed conditions, valid mode
 reports, complete artifacts, and no failed/dead dependency jobs. When
 revisiting FACED or SEED-V, use only `evalmode_20260804` (or later) artifacts.
+
+## 2026-08-05 adapter-structure audit
+
+The attached architecture review was checked against the live CBraMod code.
+The native adapter remains logically valid, with these protocol distinctions:
+
+- CBraMod's first and second `D/2` halves are the native criss-cross
+  attention branches; they are not semantically pure after full-width
+  feed-forward mixing. Manuscript wording must use “architecturally defined
+  branches.”
+- With `D=200`, each native branch has width 100 and the current `r=64`
+  setting has ratio 0.64. It is not a strong low-rank setting. Do not alter
+  the corrected frozen packet in flight; run a seed-42 `r=64` versus `r=32`
+  bottleneck gate after it finishes, then define the final ratio contract.
+- Zero-init Up gives exact dense parity. On backward step one, Up receives the
+  learning signal while Down/Q/K/V/alpha are zero; after one optimizer update,
+  the core becomes active. This is now tested and is the correct diagnostic
+  interpretation.
+- The current non-output initialization follows PyTorch defaults in CBraMod.
+  A named, exact shared initialization policy must be gated before pooling
+  CBraMod and LaBraM results; no repository mixing is permitted.
+- Current CBraMod raw ratios use branch-input denominators, while total delta
+  uses the full-grid denominator. Final tables need explicit schema-v2 names
+  and the same Q/K/V weight-and-bias convention across both repositories.
+
+Safe implementation fixes applied in this audit:
+
+1. Native adapter attachment now preserves the model's existing device and
+   dtype, including callers that attach after `.to(device)`.
+2. Repeated native attachment now raises instead of silently replacing an
+   existing adapter.
+3. Tests now cover branch isolation, channel/patch permutation equivariance,
+   opposite-half independence, strict checkpoint-before-attachment, and the
+   two-step zero-init gradient contract.
+
+These changes do not change the architecture or optimizer numerics of the
+already submitted corrected packet. The bottleneck, initialization, and
+diagnostic-schema gates are deliberately deferred until that packet is
+complete so completed and pending jobs are not scientifically mixed.

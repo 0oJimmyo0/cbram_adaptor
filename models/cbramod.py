@@ -62,6 +62,9 @@ class CBraMod(nn.Module):
         the original CBraMod checkpoint can be loaded strictly before any new
         adapter parameters are introduced.
         """
+        if self.native_axis_adapter is not None or self.generic_adapter is not None:
+            raise RuntimeError("Only one CBraMod adaptation family may be attached")
+        reference = next(self.parameters())
         with torch.random.fork_rng(devices=[]):
             torch.manual_seed(int(seed))
             self.native_axis_adapter = CBraModInteractionAdapter(
@@ -75,6 +78,10 @@ class CBraMod(nn.Module):
                 zero_init_output=bool(zero_init_output),
                 allow_singleton_patch=bool(allow_singleton_patch),
             )
+        # The normal runners attach before moving the model to the device, but
+        # keeping attachment device-safe prevents a silent CPU/GPU split when
+        # callers attach after checkpoint loading and ``model.to(device)``.
+        self.native_axis_adapter.to(device=reference.device, dtype=reference.dtype)
         self.adapter_type = str(adapter_type).strip().lower()
         print(
             "[CBraMod adapter] interaction-aligned residual enabled: "
