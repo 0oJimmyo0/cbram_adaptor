@@ -68,7 +68,8 @@ low-adapter-LR channel run, are retained only as failure diagnostics. They are
 not final SEED-V manuscript results. The corrected seed-42 gate must complete
 before the three-seed frozen packet is promoted.
 
-The two one-GPU smoke gates completed successfully (`12948289` frozen dense
-and `12948298` frozen channel). The 27-run production matrix is now queued in
-two serial `afterok` lanes (`12948315` and `12948330`); no production metric is
-claimed until those artifacts complete and pass the same integrity checks.
+The earlier one-GPU smoke gates and 27-run production matrix are historical
+pre-correction artifacts. The corrected frozen packet is queued by
+`scripts/queue_frozen_mode_repair_20260804.sh`; no corrected metric is claimed
+until its artifacts contain a valid mode report and pass the same integrity
+checks.

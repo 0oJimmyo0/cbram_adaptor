@@ -115,12 +115,10 @@ performance numbers. The production runner subsequently used the locked
 selection, strict checkpoint loading, and the same `all_patch_reps` head for
 every condition.
 
-The dense baseline and independent controls (generic bottleneck, LoRA QKV-r8,
-upper-2, axis-blind, and frozen probe) have complete three-seed packets. The
-native full-backbone channel, patch, and channel+patch conditions also have
-complete three-seed packets. Their artifact directories contain per-epoch
-metrics, strict-load reports, trainability contracts, adapter diagnostics, and
-test metrics.
+The dense baseline and native full-backbone channel, patch, and channel+patch
+conditions remain valid three-seed packets. The earlier frozen probe and
+frozen-base independent controls have complete historical artifacts, but those
+artifacts are not manuscript-eligible because of the dropout-mode defect.
 
 ## Production checklist status
 
@@ -157,12 +155,13 @@ only and are superseded by the corrected eval-mode packet. Corrected results
 will be reported as conditional frozen-backbone results, not replacements for
 dense fine-tuning.
 
-The runner must produce strict checkpoint-load evidence (path, SHA-256,
+The corrected runner must produce strict checkpoint-load evidence (path, SHA-256,
 missing/unexpected keys and parameter counts), runtime geometry, trainability
 groups, per-epoch metrics, adapter gradients/update norms, validation-selected
 test metrics, per-class metrics, confusion matrix, timing, memory and a best
 model. Test metrics are retained for reporting but are never used to choose
-the recipe or checkpoint. No production FACED run remains.
+the recipe or checkpoint. The corrected frozen FACED packet is now queued by
+`scripts/queue_frozen_mode_repair_20260804.sh`.
 
 ## Test evidence
 
