@@ -29,7 +29,8 @@ implementation or data-loader code.
 The original frozen production packet is not manuscript-eligible because the
 pre-correction loop enabled dropout in the parameter-frozen backbone. Corrected
 jobs write `training_mode_report.json` and are queued in serial lanes with no
-more than two SEED-V jobs concurrently.
+more than two SEED-V jobs concurrently. The corrected packet heads are
+SEED-V `12969503` and FACED `12969524`; tails are `12969523` and `12969547`.
 
 ## SEED-V interpretation boundary
 

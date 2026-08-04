@@ -22,6 +22,9 @@ strict checkpoint loading, geometry, trainability, optimizer groups, and
 channel gradients already passed the implementation audit. The issue was
 module mode, not a disconnected adaptor.
 
+The corrected frozen packet was submitted on 2026-08-04 as two serial dataset
+lanes: SEED-V jobs `12969503–12969523` and FACED jobs `12969524–12969547`.
+
 Historical frozen artifacts are diagnostic only. When revisiting FACED or
 SEED-V, use only corrected eval-mode artifacts. The corrected workflow is:
 
