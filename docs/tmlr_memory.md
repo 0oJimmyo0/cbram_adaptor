@@ -105,9 +105,10 @@ The first bottleneck gate was queued without multiseeds on 2026-08-05. The
 initial serial chain was cancelled after inspection showed it would leave
 available GPUs idle. The corrected split queue is:
 
-- `12982900`: corrected SEED-V upper-2, seed 3407;
-- `12982901`: corrected SEED-V axis-blind, seed 3407, parallel after the
-  currently running `12969521`;
+- `12982900`: corrected SEED-V upper-2, seed 3407, dependency released after
+  inspection so it is eligible to use the second GPU immediately;
+- `12982901`: corrected SEED-V axis-blind, seed 3407, after the currently
+  running `12969521`;
 - `12982902 -> 12982903`: FACED native channel then channel+patch, `r=32`,
   seed 42;
 - `12982904`: SEED-V native channel, `r=32`, seed 42.
