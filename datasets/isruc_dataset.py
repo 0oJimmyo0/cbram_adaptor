@@ -1,107 +1,123 @@
-import torch
-from torch.utils.data import Dataset, DataLoader
+"""Deterministic CBraMod ISRUC sequence loader.
+
+The serialized ISRUC files contain twenty consecutive 30-second epochs as
+``[20, 6, 6000]`` arrays.  This module exposes the native CBraMod geometry
+``[20, 6, 30, 200]`` without refiltering or applying the `/100` rule used by
+the FACED and SEED-V loaders.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Iterable, List, Sequence, Tuple
+
 import numpy as np
-from utils.util import to_tensor
-import os
-import random
+import torch
+from torch.utils.data import DataLoader, Dataset
 
 
+EXPECTED_STORED_SHAPE = (20, 6, 6000)
+EXPECTED_MODEL_SHAPE = (20, 6, 30, 200)
+EXPECTED_LABEL_SHAPE = (20,)
+EXPECTED_SUBJECTS = tuple(range(1, 101))
+TRAIN_SUBJECTS = tuple(range(1, 81))
+VAL_SUBJECTS = tuple(range(81, 91))
+TEST_SUBJECTS = tuple(range(91, 101))
 
-class CustomDataset(Dataset):
-    def __init__(
-            self,
-            seqs_labels_path_pair
-    ):
-        super(CustomDataset, self).__init__()
-        self.seqs_labels_path_pair = seqs_labels_path_pair
-
-    def __len__(self):
-        return len((self.seqs_labels_path_pair))
-
-    def __getitem__(self, idx):
-        seq_path = self.seqs_labels_path_pair[idx][0]
-        label_path = self.seqs_labels_path_pair[idx][1]
-        # print(seq_path)
-        # print(label_path)
-        seq = np.load(seq_path)
-        label = np.load(label_path)
-        return seq/100, label
-
-    def collate(self, batch):
-        x_seq = np.array([x[0] for x in batch])
-        y_label = np.array([x[1] for x in batch])
-        return to_tensor(x_seq), to_tensor(y_label).long()
+_NUMERIC_SUFFIX = re.compile(r"-(\d+)$")
 
 
-class LoadDataset(object):
+def _numeric_key(path: Path) -> tuple[int, str]:
+    match = _NUMERIC_SUFFIX.search(path.stem)
+    return (int(match.group(1)) if match else -1, path.name)
+
+
+def _subject_paths(root: Path, subject: int) -> tuple[Path, Path]:
+    name = f"ISRUC-group1-{int(subject)}"
+    return root / "seq" / name, root / "labels" / name
+
+
+def paired_paths(root: str | Path, subject: int) -> List[Tuple[Path, Path]]:
+    """Return exact same-stem signal/label pairs in numeric order."""
+    root = Path(root).expanduser().resolve()
+    seq_dir, label_dir = _subject_paths(root, subject)
+    if not seq_dir.is_dir() or not label_dir.is_dir():
+        raise FileNotFoundError(f"Missing ISRUC subject directories for subject {subject}: {seq_dir}, {label_dir}")
+    signals = {path.stem: path for path in seq_dir.glob("*.npy")}
+    labels = {path.stem: path for path in label_dir.glob("*.npy")}
+    if set(signals) != set(labels):
+        raise ValueError(
+            f"ISRUC signal/label basename mismatch for subject {subject}: "
+            f"signals_only={sorted(set(signals) - set(labels))[:3]} "
+            f"labels_only={sorted(set(labels) - set(signals))[:3]}"
+        )
+    return [(signals[key], labels[key]) for key in sorted(signals, key=lambda key: _numeric_key(signals[key]))]
+
+
+def split_subjects(mode: str) -> tuple[int, ...]:
+    mode = str(mode).strip().lower()
+    if mode == "train":
+        return TRAIN_SUBJECTS
+    if mode in {"val", "validation"}:
+        return VAL_SUBJECTS
+    if mode == "test":
+        return TEST_SUBJECTS
+    raise ValueError(f"Unknown ISRUC split {mode!r}; expected train, val, or test")
+
+
+class ISRUCSequenceDataset(Dataset):
+    """Subject-wise ISRUC dataset with explicit sequence geometry."""
+
+    def __init__(self, root: str | Path, mode: str, input_scale_divisor: float = 1.0):
+        self.root = Path(root).expanduser().resolve()
+        self.mode = str(mode).strip().lower()
+        self.input_scale_divisor = float(input_scale_divisor)
+        if self.input_scale_divisor != 1.0:
+            raise ValueError("ISRUC uses input_scale_divisor=1.0; do not apply CBraMod /100 scaling")
+        self.records: List[Tuple[Path, Path, int]] = []
+        for subject in split_subjects(self.mode):
+            self.records.extend((signal, label, subject) for signal, label in paired_paths(self.root, subject))
+        if not self.records:
+            raise ValueError(f"ISRUC split {self.mode!r} is empty")
+
+    def __len__(self) -> int:
+        return len(self.records)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        signal_path, label_path, _subject = self.records[int(index)]
+        signal = np.load(signal_path, allow_pickle=False)
+        labels = np.load(label_path, allow_pickle=False)
+        if tuple(signal.shape) != EXPECTED_STORED_SHAPE:
+            raise RuntimeError(f"ISRUC signal shape {tuple(signal.shape)} != {EXPECTED_STORED_SHAPE}: {signal_path}")
+        if tuple(labels.shape) != EXPECTED_LABEL_SHAPE:
+            raise RuntimeError(f"ISRUC label shape {tuple(labels.shape)} != {EXPECTED_LABEL_SHAPE}: {label_path}")
+        if not np.isfinite(signal).all() or not np.isfinite(labels).all():
+            raise RuntimeError(f"Non-finite ISRUC sample: {signal_path} / {label_path}")
+        signal = signal.reshape(EXPECTED_MODEL_SHAPE).astype(np.float32, copy=False)
+        labels = labels.astype(np.int64, copy=False)
+        if not set(np.unique(labels).tolist()).issubset({0, 1, 2, 3, 4}):
+            raise RuntimeError(f"ISRUC labels are not mapped to 0..4: {label_path}")
+        return torch.from_numpy(signal), torch.from_numpy(labels)
+
+
+class LoadDataset:
+    """Compatibility wrapper for the legacy ``finetune_main.py`` entrypoint."""
+
     def __init__(self, params):
         self.params = params
-        self.seqs_dir = os.path.join(params.datasets_dir, 'seq')
-        self.labels_dir = os.path.join(params.datasets_dir, 'labels')
-        self.seqs_labels_path_pair = self.load_path()
+        self.datasets_dir = params.datasets_dir
 
     def get_data_loader(self):
-        train_pairs, val_pairs, test_pairs = self.split_dataset(self.seqs_labels_path_pair)
-        train_set = CustomDataset(train_pairs)
-        val_set = CustomDataset(val_pairs)
-        test_set = CustomDataset(test_pairs)
-        print(len(train_set), len(val_set), len(test_set))
-        print(len(train_set) + len(val_set) + len(test_set))
-        data_loader = {
-            'train': DataLoader(
-                train_set,
-                batch_size=self.params.batch_size,
-                collate_fn=train_set.collate,
-                shuffle=True,
-            ),
-            'val': DataLoader(
-                val_set,
-                batch_size=1,
-                collate_fn=val_set.collate,
-                shuffle=False,
-            ),
-            'test': DataLoader(
-                test_set,
-                batch_size=1,
-                collate_fn=test_set.collate,
-                shuffle=False,
-            ),
+        generator = torch.Generator().manual_seed(int(getattr(self.params, "loader_seed", self.params.seed)))
+        datasets = {mode: ISRUCSequenceDataset(self.datasets_dir, mode, 1.0) for mode in ("train", "val", "test")}
+        return {
+            mode: DataLoader(
+                dataset,
+                batch_size=int(self.params.batch_size),
+                shuffle=mode == "train",
+                generator=generator if mode == "train" else None,
+                num_workers=int(getattr(self.params, "num_workers", 0)),
+            )
+            for mode, dataset in datasets.items()
         }
-        return data_loader
-
-    def load_path(self):
-        seqs_labels_path_pair = []
-        # subject_nums = os.listdir(self.seqs_dir)
-        # print(subject_nums)
-        subject_dirs_seq = []
-        subject_dirs_labels = []
-        for subject_num in range(1, 101):
-            subject_dirs_seq.append(os.path.join(self.seqs_dir, f'ISRUC-group1-{subject_num}'))
-            subject_dirs_labels.append(os.path.join(self.labels_dir, f'ISRUC-group1-{subject_num}'))
-
-        for subject_seq, subject_label in zip(subject_dirs_seq, subject_dirs_labels):
-            # print(subject_seq, subject_label)
-            subject_pairs = []
-            seq_fnames = os.listdir(subject_seq)
-            label_fnames = os.listdir(subject_label)
-            # print(seq_fnames)
-            for seq_fname, label_fname in zip(seq_fnames, label_fnames):
-                subject_pairs.append((os.path.join(subject_seq, seq_fname), os.path.join(subject_label, label_fname)))
-            seqs_labels_path_pair.append(subject_pairs)
-        # print(seqs_labels_path_pair)
-        return seqs_labels_path_pair
-
-    def split_dataset(self, seqs_labels_path_pair):
-        train_pairs = []
-        val_pairs = []
-        test_pairs = []
-
-        for i in range(100):
-            if i < 80:
-                train_pairs.extend(seqs_labels_path_pair[i])
-            elif i < 90:
-                val_pairs.extend(seqs_labels_path_pair[i])
-            else:
-                test_pairs.extend(seqs_labels_path_pair[i])
-        # print(train_pairs, val_pairs, test_pairs)
-        return train_pairs, val_pairs, test_pairs

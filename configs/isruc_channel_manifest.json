@@ -1,0 +1,13 @@
+{
+  "channels": [
+    "F3-A2",
+    "C3-A2",
+    "O1-A2",
+    "F4-A1",
+    "C4-A1",
+    "O2-A1"
+  ],
+  "position_names": ["F3", "C3", "O1", "F4", "C4", "O2"],
+  "sampling_rate_hz": 200,
+  "source": "ISRUC Subgroup I serialized CBraMod protocol"
+}
