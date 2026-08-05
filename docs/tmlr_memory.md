@@ -223,3 +223,14 @@ and training reports.
 The first full ISRUC dense baseline is job `12992930` (seed 42, batch 8,
 20 epochs). No ISRUC adapter/control or multiseed job may be submitted before
 its full trajectory and final metrics are reviewed.
+
+The baseline completed successfully with strict checkpoint loading and all
+artifacts. It selected epoch 5 by validation κ (`0.7376`) and reached test BA
+`0.7855`, test κ `0.7397`, and weighted F1 `0.8003`. The complete trajectory
+shows early validation improvement followed by oscillation while train loss
+continues down, so the dense recipe was not locked immediately. A controlled
+seed-42 LR sweep is pending as jobs `13001412` and `13001413`: the lower run
+uses backbone/head LR `5e-5/8.84e-5`, the upper run uses `2e-4/3.536e-4`, and
+both retain batch 8, 20 epochs, scale 1.0, the same loader/checkpoint/split,
+and validation-κ selection. No adaptor or multiseed job is allowed until this
+gate is resolved.

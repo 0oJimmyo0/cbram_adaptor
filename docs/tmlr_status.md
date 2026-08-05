@@ -11,7 +11,7 @@ implementation or data-loader code.
 | --- | --- | --- | --- | --- | --- | --- |
 | FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Corrected frozen packet 24/24 complete; r=32 seed-42 gate complete | Corrected frozen controls 24/24 complete | **Packet complete; r=64 retained as operational setting** |
 | SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds | Corrected frozen packet 21/21 complete; r=32 diagnostic gate complete | Corrected frozen controls 21/21 complete | **Complete; r=64 locked** |
-| ISRUC | CBraMod | **Serialized audit passed; 3,559/468/435 sequences, no overlap, `(20,6,6000)` stored -> `(20,6,30,200)` model geometry, divisor `1.0`** | Seed-42 dense baseline submitted (`12992930`) | Not started | Not started | **Baseline gate in progress; no adaptor jobs yet** |
+| ISRUC | CBraMod | **Serialized audit passed; 3,559/468/435 sequences, no overlap, `(20,6,6000)` stored -> `(20,6,30,200)` model geometry, divisor `1.0`** | Seed-42 dense baseline complete; LR sweep `13001412–13001413` pending | Not started | Not started | **Baseline/LR gate in progress; no adaptor jobs yet** |
 
 ## SEED-V locked contract
 
@@ -186,7 +186,11 @@ the expected labels `0..4`, no subject overlap, and no non-finite values. The
 loader/model smoke test also passed with strict checkpoint loading and a
 sequence-level `[B,20,6,30,200] -> [B,20,5]` forward/backward/test path.
 
-The first full baseline is job `12992930`, seed 42, batch 8, 20 epochs. It is
-the only ISRUC model job currently submitted. Do not submit native adapters,
-controls, or multiseeds until this job's complete epoch trajectory and final
-validation-selected test metrics pass the fidelity gate.
+The first full baseline is job `12992930`, seed 42, batch 8, 20 epochs. It
+completed with test BA `0.7855`, κ `0.7397`, and weighted F1 `0.8003`, with
+validation-κ selection at epoch 5. The trajectory is non-monotonic: training
+loss continues to fall while validation κ oscillates after the early peak.
+Jobs `13001412` and `13001413` are the only follow-up jobs, sweeping the
+backbone/head LR pair down and up by 2x while retaining every other setting.
+Do not submit native adapters, controls, or multiseeds until this sweep is
+reviewed and one operational baseline recipe is locked.
