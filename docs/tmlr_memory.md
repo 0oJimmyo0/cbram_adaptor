@@ -206,3 +206,20 @@ Required order:
 5. Promote only technically clean conditions to `{42,1024,3407}` and archive
    per-epoch validation, selected test BA/kappa/weighted-F1, checkpoint,
    trainability, mode, geometry, and adapter/update diagnostics.
+
+### ISRUC implementation progress
+
+The serialized-only ISRUC audit passed on 2026-08-05. It found 3,559 train,
+468 validation, and 435 test sequences, exact same-stem signal/label pairing,
+stored arrays `[20,6,6000]`, model tensors `[20,6,30,200]`, labels `0..4`, no
+subject overlap, finite values, and the locked scale divisor `1.0`. The
+CBraMod-only loader now uses numeric filename ordering and explicit subject
+splits. The sequence model encodes each of the 20 epochs through CBraMod and
+classifies the sequence with a one-layer Transformer head, returning
+`[B,20,5]` logits. The strict smoke path passed checkpoint loading,
+geometry, one training step, validation, selected-test artifact generation,
+and training reports.
+
+The first full ISRUC dense baseline is job `12992930` (seed 42, batch 8,
+20 epochs). No ISRUC adapter/control or multiseed job may be submitted before
+its full trajectory and final metrics are reviewed.

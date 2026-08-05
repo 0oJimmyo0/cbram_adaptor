@@ -11,7 +11,7 @@ implementation or data-loader code.
 | --- | --- | --- | --- | --- | --- | --- |
 | FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Corrected frozen packet 24/24 complete; r=32 seed-42 gate complete | Corrected frozen controls 24/24 complete | **Packet complete; r=64 retained as operational setting** |
 | SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds | Corrected frozen packet 21/21 complete; r=32 diagnostic gate complete | Corrected frozen controls 21/21 complete | **Complete; r=64 locked** |
-| ISRUC | CBraMod | **Next target; serialized-data/provenance audit not yet complete** | Not started | Not started | Not started | **Do not submit model jobs yet** |
+| ISRUC | CBraMod | **Serialized audit passed; 3,559/468/435 sequences, no overlap, `(20,6,6000)` stored -> `(20,6,30,200)` model geometry, divisor `1.0`** | Seed-42 dense baseline submitted (`12992930`) | Not started | Not started | **Baseline gate in progress; no adaptor jobs yet** |
 
 ## SEED-V locked contract
 
@@ -176,3 +176,17 @@ ISRUC work order:
 6. Promote only technically clean conditions to exactly `{42,1024,3407}` and
    archive per-epoch validation, selected test BA/kappa/weighted-F1,
    checkpoint, trainability, mode, geometry, and adapter/update diagnostics.
+
+## ISRUC current gate status
+
+The serialized-only audit passed and is archived at
+`results/isruc/audits/isruc_serialized_audit.json`. It found 3,559 train,
+468 validation, and 435 test sequences, exact same-stem signal/label pairing,
+the expected labels `0..4`, no subject overlap, and no non-finite values. The
+loader/model smoke test also passed with strict checkpoint loading and a
+sequence-level `[B,20,6,30,200] -> [B,20,5]` forward/backward/test path.
+
+The first full baseline is job `12992930`, seed 42, batch 8, 20 epochs. It is
+the only ISRUC model job currently submitted. Do not submit native adapters,
+controls, or multiseeds until this job's complete epoch trajectory and final
+validation-selected test metrics pass the fidelity gate.
