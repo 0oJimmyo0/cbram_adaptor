@@ -152,3 +152,57 @@ The operational bottleneck is now locked at r=64. The r=32 results are
 diagnostic-only and no r=32 multiseed packet will be run. Both SEED-V and
 FACED have completed all required r=64 three-seed conditions; remaining work
 is cross-backbone aggregation, final artifact audit, and manuscript analysis.
+
+## 2026-08-05 transition to ISRUC
+
+The corrected CBraMod FACED and SEED-V packets are now complete. Both datasets
+have the required r=64 conditions under exactly three seeds `{42,1024,3407}`;
+all production artifacts have complete epoch/test records and strict
+checkpoint, trainability, and frozen-mode reports; and the final accounting
+audit found no failed or `DependencyNeverSatisfied` production jobs. The r=32
+jobs remain diagnostic-only. Do not add more FACED or SEED-V jobs unless a
+later artifact audit finds a concrete integrity issue.
+
+The next target is ISRUC in this CBraMod repository. The LaBraM ISRUC work is
+the reference for data provenance, channel order, sequence geometry, and model
+placement only. The backbone and loader implementations must remain separate.
+
+### ISRUC reference contract
+
+- ISRUC-Sleep Subgroup I, subjects 1--100.
+- Subject-wise split: subjects 1--80 train, 81--90 validation, 91--100 test.
+- Six bipolar channels, ordered `F3-A2, C3-A2, O1-A2, F4-A1, C4-A1, O2-A1`.
+- 200 Hz, 30-second epochs, 30 temporal patches of 200 samples.
+- Twenty consecutive epochs per stored sequence: `[20,6,30,200]`.
+- Raw labels `{0,1,2,3,5}` mapped to `{0,1,2,3,4}`.
+- Serialized arrays are already filtered/segmented; no second filtering pass.
+- ISRUC scale divisor is `1.0`, not the `/100` used by the current FACED and
+  SEED-V CBraMod loaders.
+- The project-wide confirmatory seeds remain `{42,1024,3407}`. An older
+  LaBraM note listing another seed set does not override this project rule.
+
+### ISRUC implementation warning and checklist
+
+CBraMod already contains `datasets/isruc_dataset.py` and
+`models/model_for_isruc.py`, but they are an incomplete prototype, not a
+faithful production path: the loader applies `/100`, pairs files by
+`os.listdir` order, and ISRUC is not registered in the TMLR config/runner.
+Do not submit ISRUC model jobs until these issues are repaired and tested.
+
+Required order:
+
+1. Build a CBraMod-only serialized-data audit for numeric pairing, shape and
+   finite checks, labels, subject splits/no overlap, channel metadata/order,
+   sequence counts, and scale.
+2. Implement/register the CBraMod ISRUC loader and configuration while keeping
+   the 20-epoch sequence explicit. Encode each epoch as `[6,30,200]`, attach
+   native adapters at that grid, and classify with the shared sequence encoder.
+   Both ISRUC native axes are meaningful: channel length 6 and patch length 30.
+3. Pass data/shape/checkpoint smoke tests, then run one seed-42 dense baseline.
+   Lock the recipe from its full validation trajectory before comparing
+   adapters.
+4. Run seed-42 native channel/patch/channel+patch and the common frozen and
+   parameter-matched controls only after the dense gate is valid.
+5. Promote only technically clean conditions to `{42,1024,3407}` and archive
+   per-epoch validation, selected test BA/kappa/weighted-F1, checkpoint,
+   trainability, mode, geometry, and adapter/update diagnostics.

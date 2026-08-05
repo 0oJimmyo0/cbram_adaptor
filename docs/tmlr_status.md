@@ -11,6 +11,7 @@ implementation or data-loader code.
 | --- | --- | --- | --- | --- | --- | --- |
 | FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Corrected frozen packet 24/24 complete; r=32 seed-42 gate complete | Corrected frozen controls 24/24 complete | **Packet complete; r=64 retained as operational setting** |
 | SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds | Corrected frozen packet 21/21 complete; r=32 diagnostic gate complete | Corrected frozen controls 21/21 complete | **Complete; r=64 locked** |
+| ISRUC | CBraMod | **Next target; serialized-data/provenance audit not yet complete** | Not started | Not started | Not started | **Do not submit model jobs yet** |
 
 ## SEED-V locked contract
 
@@ -125,3 +126,53 @@ The final corrected seed-3407 controls completed as jobs `12982900` and
 FACED channel, FACED channel+patch, and SEED-V channel. It was intentionally
 single-seed and is interpreted against the existing corrected r=64 logs before
 any multiseed decision.
+
+## Transition decision: FACED and SEED-V complete
+
+The corrected CBraMod FACED and SEED-V packets are complete for the current
+TMLR study scope. Each has the required r=64 conditions with exactly the
+project-wide three seeds `{42,1024,3407}`, complete epoch and test artifacts,
+strict checkpoint/trainability/mode reports, and no failed or dead production
+jobs. The r=32 experiments are diagnostic gates only. We therefore move to
+ISRUC rather than extending the FACED or SEED-V tuning queue.
+
+## ISRUC CBraMod entry gate
+
+ISRUC must be implemented and audited inside this CBraMod repository. LaBraM
+is a protocol and geometry reference only; no LaBraM backbone, loader, or
+implementation is imported into CBraMod.
+
+The reference contract is ISRUC-Sleep Subgroup I, subjects 1--100 with
+subject-wise splits 1--80 train, 81--90 validation, and 91--100 test. Each
+stored item contains 20 consecutive 30-second epochs, six bipolar EEG channels
+in the order `F3-A2, C3-A2, O1-A2, F4-A1, C4-A1, O2-A1`, and 30 temporal
+patches of 200 samples: `[20,6,30,200]`. Labels `{0,1,2,3,5}` map to
+`{0,1,2,3,4}`. Existing serialized arrays are already filtered and segmented,
+so they must not be filtered again. ISRUC uses input scale divisor `1.0`; the
+`/100` rule for FACED/SEED-V must not be copied to ISRUC.
+
+The existing `datasets/isruc_dataset.py` and `models/model_for_isruc.py` are
+only an incomplete prototype. They currently apply `/100`, pair files using
+directory iteration order, and are not registered in `tmlr/config.py` or the
+production runner. They must not be used for paper-facing runs until repaired
+and covered by the audit below.
+
+ISRUC work order:
+
+1. Audit serialized pairing, shapes, finite values, labels, subject split
+   counts/no overlap, channel metadata/order, and the scale divisor.
+2. Implement a CBraMod-only sequence loader/config preserving
+   `[B,20,6,30,200]`; do not flatten the 20-epoch sequence into independent
+   examples.
+3. Encode each epoch with CBraMod, attach native adapters at its `[6,30,200]`
+   grid, then use the sequence encoder/classifier. Both native axes are
+   meaningful on ISRUC: channel length 6 and patch length 30.
+4. Run data/shape/checkpoint smoke tests, then one seed-42 dense baseline.
+   Lock the operational recipe from its full validation trajectory before
+   comparing adapters.
+5. Run seed-42 native channel, patch, channel+patch, and the common frozen,
+   generic, LoRA, upper-layer, and axis-blind controls only after the dense
+   gate is valid.
+6. Promote only technically clean conditions to exactly `{42,1024,3407}` and
+   archive per-epoch validation, selected test BA/kappa/weighted-F1,
+   checkpoint, trainability, mode, geometry, and adapter/update diagnostics.
