@@ -26,6 +26,10 @@ BATCH_SIZE="${BATCH_SIZE:-8}"
 LR="${LR:-1e-4}"
 HEAD_LR="${HEAD_LR:-1.768e-4}"
 ADAPTER_LR="${ADAPTER_LR:-2e-5}"
+ADAPTER_BOTTLENECK="${ADAPTER_BOTTLENECK:-}"
+ADAPTER_GAMMA="${ADAPTER_GAMMA:-}"
+ADAPTER_INIT_ALPHA="${ADAPTER_INIT_ALPHA:-}"
+ADAPTER_WEIGHT_DECAY="${ADAPTER_WEIGHT_DECAY:-}"
 LORA_LR="${LORA_LR:-2e-5}"
 UPPER_LR="${UPPER_LR:-2e-4}"
 DEVICE="${DEVICE:-cuda}"
@@ -40,6 +44,7 @@ source "$ENV_DIR/bin/activate"
 cd "$REPO_DIR"
 
 echo "CBraMod ISRUC launch: method=$METHOD adapter=${ADAPTER_TYPE:-none} seed=$SEED batch=$BATCH_SIZE epochs=$EPOCHS run_id=$RUN_ID" >&2
+echo "adapter_lr=$ADAPTER_LR bottleneck=${ADAPTER_BOTTLENECK:-from_config} gamma=${ADAPTER_GAMMA:-from_config} init_alpha=${ADAPTER_INIT_ALPHA:-from_config} adapter_weight_decay=${ADAPTER_WEIGHT_DECAY:-from_config}" >&2
 echo "python: $(command -v python)" >&2
 echo "git_commit: $(git rev-parse HEAD)" >&2
 echo "checkpoint_sha256: $(sha256sum /data/neurogroup/mingyangjiang/data/weights/pretrained_weights.pth | awk '{print $1}')" >&2
@@ -66,6 +71,10 @@ RUN_ARGS=(
   --device "$DEVICE" --run-id "$RUN_ID"
 )
 if [[ -n "$ADAPTER_TYPE" ]]; then RUN_ARGS+=(--adapter-type "$ADAPTER_TYPE"); fi
+if [[ -n "$ADAPTER_BOTTLENECK" ]]; then RUN_ARGS+=(--adapter-bottleneck "$ADAPTER_BOTTLENECK"); fi
+if [[ -n "$ADAPTER_GAMMA" ]]; then RUN_ARGS+=(--adapter-gamma "$ADAPTER_GAMMA"); fi
+if [[ -n "$ADAPTER_INIT_ALPHA" ]]; then RUN_ARGS+=(--adapter-init-alpha "$ADAPTER_INIT_ALPHA"); fi
+if [[ -n "$ADAPTER_WEIGHT_DECAY" ]]; then RUN_ARGS+=(--adapter-weight-decay "$ADAPTER_WEIGHT_DECAY"); fi
 if [[ -n "$MAX_TRAIN_BATCHES" ]]; then RUN_ARGS+=(--max-train-batches "$MAX_TRAIN_BATCHES"); fi
 if [[ -n "$MAX_VAL_BATCHES" ]]; then RUN_ARGS+=(--max-val-batches "$MAX_VAL_BATCHES"); fi
 if [[ -n "$MAX_TEST_BATCHES" ]]; then RUN_ARGS+=(--max-test-batches "$MAX_TEST_BATCHES"); fi
