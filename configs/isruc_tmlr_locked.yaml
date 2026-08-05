@@ -13,6 +13,7 @@ adapter_lr: 0.00002
 weight_decay: 0.05
 head_weight_decay: 0.05
 adapter_weight_decay: 0.05
+adapter_alpha_weight_decay: 0.05
 input_scale_divisor: 1.0
 selection_metric: cohen_kappa
 dropout: 0.1

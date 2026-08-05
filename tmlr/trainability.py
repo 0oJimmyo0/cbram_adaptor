@@ -22,6 +22,14 @@ FROZEN_BASE_METHODS = {
 def _component(name: str) -> str:
     if ".lora_A" in name or ".lora_B" in name:
         return "lora"
+    if (
+        name.endswith(".alpha")
+        and (
+            name.startswith("backbone.native_axis_adapter.")
+            or name.startswith("backbone.generic_adapter.")
+        )
+    ):
+        return "adapter_scalar"
     if name.startswith("backbone.native_axis_adapter.") or name.startswith("backbone.generic_adapter."):
         return "adapter"
     if name.startswith("backbone.encoder.layers."):
@@ -51,6 +59,7 @@ def apply_trainability_contract(
     weight_decay: float = 0.05,
     head_weight_decay: float = 0.05,
     adapter_weight_decay: float = 0.05,
+    adapter_alpha_weight_decay: float | None = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     method = str(method).strip().lower()
     if method in RESERVED_METHODS:
@@ -61,6 +70,8 @@ def apply_trainability_contract(
     named = list(model.named_parameters())
     if not named:
         raise AssertionError("Model has zero parameters")
+    if adapter_alpha_weight_decay is None:
+        adapter_alpha_weight_decay = adapter_weight_decay
     for _, parameter in named:
         parameter.requires_grad_(False)
 
@@ -80,7 +91,9 @@ def apply_trainability_contract(
     trainable_names: List[str] = []
     frozen_names: List[str] = []
     component_names: Dict[str, List[str]] = {
-        key: [] for key in ("backbone", "upper", "lora", "adapter", "classifier", "other")
+        key: [] for key in (
+            "backbone", "upper", "lora", "adapter", "adapter_scalar", "classifier", "other"
+        )
     }
     for name, parameter in named:
         component = _component(name)
@@ -90,9 +103,9 @@ def apply_trainability_contract(
         elif method == "frozen_probe":
             should_train = component == "classifier"
         elif method in {"interaction_aligned", "generic_bottleneck", "axis_blind"}:
-            should_train = component in {"adapter", "classifier"}
+            should_train = component in {"adapter", "adapter_scalar", "classifier"}
         elif method == "native_full_finetune":
-            should_train = component in {"backbone", "upper", "adapter", "classifier"}
+            should_train = component in {"backbone", "upper", "adapter", "adapter_scalar", "classifier"}
         elif method == "lora":
             should_train = component in {"lora", "classifier"}
         elif method == "upper_k_finetune":
@@ -121,6 +134,7 @@ def apply_trainability_contract(
         ("upper", "upper", float(upper_lr), float(weight_decay)),
         ("lora", "lora", float(lora_lr), float(adapter_weight_decay)),
         ("adapter", "adapter", float(adapter_lr), float(adapter_weight_decay)),
+        ("adapter_scalar", "adapter_scalar", float(adapter_lr), float(adapter_alpha_weight_decay)),
         ("classifier", "classifier", float(head_lr), float(head_weight_decay)),
     ]
     groups: List[Dict[str, Any]] = []

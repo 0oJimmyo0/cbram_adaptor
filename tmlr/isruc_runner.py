@@ -178,6 +178,7 @@ def run(config: IsrucTMLRConfig) -> Dict[str, Any]:
         lora_lr=config.lora_lr, upper_lr=config.upper_lr,
         weight_decay=config.weight_decay, head_weight_decay=config.head_weight_decay,
         adapter_weight_decay=config.adapter_weight_decay,
+        adapter_alpha_weight_decay=config.adapter_alpha_weight_decay,
     )
     optimizer = EagerAdamW(groups)
     scheduler = EagerCosineAnnealing(

@@ -299,6 +299,14 @@ def _norm(values: Iterable[torch.Tensor]) -> float:
 def _parameter_component(name: str) -> str:
     if ".lora_A" in name or ".lora_B" in name:
         return "lora"
+    if (
+        name.endswith(".alpha")
+        and (
+            name.startswith("backbone.native_axis_adapter.")
+            or name.startswith("backbone.generic_adapter.")
+        )
+    ):
+        return "adapter_scalar"
     if name.startswith("backbone.native_axis_adapter.") or name.startswith("backbone.generic_adapter."):
         return "adapter"
     if name.startswith("backbone.encoder.layers."):
@@ -313,7 +321,7 @@ def _parameter_component(name: str) -> str:
 
 
 def _gradient_report(model: nn.Module) -> Dict[str, float]:
-    components = {"backbone": [], "upper": [], "adapter": [], "lora": [], "classifier": []}
+    components = {"backbone": [], "upper": [], "adapter": [], "adapter_scalar": [], "lora": [], "classifier": []}
     for name, parameter in model.named_parameters():
         if parameter.grad is None:
             continue
@@ -327,8 +335,8 @@ def _gradient_report(model: nn.Module) -> Dict[str, float]:
 
 
 def _update_report(model: nn.Module, before: Dict[str, torch.Tensor]) -> Dict[str, float]:
-    values = {"backbone": [], "upper": [], "adapter": [], "lora": [], "classifier": []}
-    relative = {"backbone": [], "upper": [], "adapter": [], "lora": [], "classifier": []}
+    values = {"backbone": [], "upper": [], "adapter": [], "adapter_scalar": [], "lora": [], "classifier": []}
+    relative = {"backbone": [], "upper": [], "adapter": [], "adapter_scalar": [], "lora": [], "classifier": []}
     for name, parameter in model.named_parameters():
         if name not in before:
             continue

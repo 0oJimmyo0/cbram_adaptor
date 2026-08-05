@@ -58,6 +58,7 @@ DEFAULTS: Dict[str, Any] = {
     "weight_decay": 0.05,
     "head_weight_decay": 0.05,
     "adapter_weight_decay": 0.05,
+    "adapter_alpha_weight_decay": 0.05,
     "lora_lr": 2e-5,
     "upper_lr": 2e-4,
     "scheduler_eta_min": 1e-6,
@@ -175,7 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None)
     for name in ("adapter_bottleneck", "adapter_heads", "generic_bottleneck", "axis_blind_bottleneck", "upper_k", "lora_rank", "seed", "head_seed", "loader_seed", "adapter_seed", "batch_size", "epochs", "max_train_batches", "max_val_batches", "max_test_batches", "num_workers"):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, type=int)
-    for name in ("adapter_dropout", "adapter_init_alpha", "adapter_gamma", "lr", "head_lr", "adapter_lr", "weight_decay", "head_weight_decay", "adapter_weight_decay", "lora_lr", "upper_lr", "lora_alpha", "scheduler_eta_min", "dropout", "input_scale_divisor", "label_smoothing", "clip_grad"):
+    for name in ("adapter_dropout", "adapter_init_alpha", "adapter_gamma", "lr", "head_lr", "adapter_lr", "weight_decay", "head_weight_decay", "adapter_weight_decay", "adapter_alpha_weight_decay", "lora_lr", "upper_lr", "lora_alpha", "scheduler_eta_min", "dropout", "input_scale_divisor", "label_smoothing", "clip_grad"):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, type=float)
     for name in ("adapter_zero_init_output", "save_test", "overwrite"):
         parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=None, action=argparse.BooleanOptionalAction)

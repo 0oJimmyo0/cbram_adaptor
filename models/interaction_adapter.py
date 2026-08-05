@@ -159,6 +159,8 @@ class CBraModInteractionAdapter(nn.Module):
         self._last_geometry: Optional[Dict[str, int]] = None
         self._last_raw_channel_ratio: Optional[float] = None
         self._last_raw_patch_ratio: Optional[float] = None
+        self._last_scaled_channel_ratio: Optional[float] = None
+        self._last_scaled_patch_ratio: Optional[float] = None
         self._last_delta_ratio: Optional[float] = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -195,17 +197,31 @@ class CBraModInteractionAdapter(nn.Module):
         delta = torch.zeros_like(x)
         self._last_raw_channel_ratio = None
         self._last_raw_patch_ratio = None
+        self._last_scaled_channel_ratio = None
+        self._last_scaled_patch_ratio = None
         spatial = x[..., :self.branch_dim]
         temporal = x[..., self.branch_dim:]
 
         if hasattr(self, "channel_branch"):
             channel_delta = self.channel_branch(spatial, axis="channel")
-            delta[..., :self.branch_dim] += self.channel_branch.alpha * channel_delta
+            scaled_channel = self.gamma * self.channel_branch.alpha * channel_delta
+            delta[..., :self.branch_dim] += scaled_channel
             self._last_raw_channel_ratio = self.channel_branch._last_raw_ratio
+            self._last_scaled_channel_ratio = float(
+                scaled_channel.detach().float().norm()
+                .div(x.detach().float().norm().clamp_min(1e-12))
+                .cpu()
+            )
         if hasattr(self, "patch_branch"):
             patch_delta = self.patch_branch(temporal, axis="patch")
-            delta[..., self.branch_dim:] += self.patch_branch.alpha * patch_delta
+            scaled_patch = self.gamma * self.patch_branch.alpha * patch_delta
+            delta[..., self.branch_dim:] += scaled_patch
             self._last_raw_patch_ratio = self.patch_branch._last_raw_ratio
+            self._last_scaled_patch_ratio = float(
+                scaled_patch.detach().float().norm()
+                .div(x.detach().float().norm().clamp_min(1e-12))
+                .cpu()
+            )
 
         delta = self.gamma * delta
         self._last_delta_ratio = float(
@@ -230,6 +246,10 @@ class CBraModInteractionAdapter(nn.Module):
             diagnostics["raw_channel_ratio"] = self._last_raw_channel_ratio
         if self._last_raw_patch_ratio is not None:
             diagnostics["raw_patch_ratio"] = self._last_raw_patch_ratio
+        if self._last_scaled_channel_ratio is not None:
+            diagnostics["scaled_channel_residual_ratio"] = self._last_scaled_channel_ratio
+        if self._last_scaled_patch_ratio is not None:
+            diagnostics["scaled_patch_residual_ratio"] = self._last_scaled_patch_ratio
         if self._last_delta_ratio is not None:
             diagnostics["adapter_delta_ratio"] = self._last_delta_ratio
         return diagnostics
