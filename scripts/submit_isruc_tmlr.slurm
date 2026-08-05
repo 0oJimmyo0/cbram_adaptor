@@ -25,7 +25,9 @@ EPOCHS="${EPOCHS:-20}"
 BATCH_SIZE="${BATCH_SIZE:-8}"
 LR="${LR:-1e-4}"
 HEAD_LR="${HEAD_LR:-1.768e-4}"
-ADAPTER_LR="${ADAPTER_LR:-5e-4}"
+ADAPTER_LR="${ADAPTER_LR:-2e-5}"
+LORA_LR="${LORA_LR:-2e-5}"
+UPPER_LR="${UPPER_LR:-2e-4}"
 DEVICE="${DEVICE:-cuda}"
 MAX_TRAIN_BATCHES="${MAX_TRAIN_BATCHES:-}"
 MAX_VAL_BATCHES="${MAX_VAL_BATCHES:-}"
@@ -59,7 +61,8 @@ nvidia-smi || true
 RUN_ARGS=(
   --config "$CONFIG" --method "$METHOD" --seed "$SEED"
   --adapter-seed "$ADAPTER_SEED" --lr "$LR" --head-lr "$HEAD_LR"
-  --adapter-lr "$ADAPTER_LR" --batch-size "$BATCH_SIZE" --epochs "$EPOCHS"
+  --adapter-lr "$ADAPTER_LR" --lora-lr "$LORA_LR" --upper-lr "$UPPER_LR"
+  --batch-size "$BATCH_SIZE" --epochs "$EPOCHS"
   --device "$DEVICE" --run-id "$RUN_ID"
 )
 if [[ -n "$ADAPTER_TYPE" ]]; then RUN_ARGS+=(--adapter-type "$ADAPTER_TYPE"); fi

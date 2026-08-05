@@ -228,9 +228,35 @@ The baseline completed successfully with strict checkpoint loading and all
 artifacts. It selected epoch 5 by validation κ (`0.7376`) and reached test BA
 `0.7855`, test κ `0.7397`, and weighted F1 `0.8003`. The complete trajectory
 shows early validation improvement followed by oscillation while train loss
-continues down, so the dense recipe was not locked immediately. A controlled
-seed-42 LR sweep is pending as jobs `13001412` and `13001413`: the lower run
-uses backbone/head LR `5e-5/8.84e-5`, the upper run uses `2e-4/3.536e-4`, and
-both retain batch 8, 20 epochs, scale 1.0, the same loader/checkpoint/split,
-and validation-κ selection. No adaptor or multiseed job is allowed until this
-gate is resolved.
+continues down, so the dense recipe was held open for one bounded LR gate.
+
+### ISRUC dense contract and single-seed ladder (current)
+
+The LR gate is resolved. Jobs `13001412` and `13001413` both completed with
+complete artifacts and strict checkpoint reports. The upper pair
+`lr=2e-4`, `head_lr=3.536e-4` wins by validation κ (`0.7381` versus `0.7376`
+for the center and `0.7318` for the lower pair) and is now the CBraMod ISRUC
+operational contract. Its selected test result is BA `0.7884`, κ `0.7503`,
+weighted F1 `0.8078`; test is not used for recipe selection.
+
+The LaBraM ISRUC runs are used only as a reference for the ladder and for the
+conservative adapter-LR principle. LaBraM reports a dense anchor near BA
+`0.7997` using its own backbone, batch/epoch, and optimizer implementation;
+that number is not a CBraMod baseline or a reason to mix repositories.
+
+Before any multiseed promotion, run these eleven CBraMod seed-42 conditions:
+
+1. Frozen classifier/probe.
+2. Frozen native channel, patch, and channel+patch.
+3. Frozen generic bottleneck, LoRA QKV-r8, upper-2, and parameter-matched
+   axis-blind controls.
+4. Native full-backbone-plus-adapter channel, patch, and channel+patch.
+
+All conditions retain batch 8, 20 epochs, input divisor 1.0, the same
+checkpoint/split/sequence geometry, validation-κ selection, and test-after-
+selection reporting. Native/generic/LoRA trainable adaptation uses LR
+`2e-5` (0.1x dense LR); upper-2 uses `2e-4`. A method-matrix smoke audit
+passed all eleven configurations, including output shape `[B,20,5]`,
+trainability, and frozen `.eval()` mode. The production queue is split into
+two `afterok` lanes with one A6000 per job. No multiseed jobs may be submitted
+until the entire single-seed ladder is technically clean and interpreted.

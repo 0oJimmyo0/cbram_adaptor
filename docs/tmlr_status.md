@@ -11,7 +11,7 @@ implementation or data-loader code.
 | --- | --- | --- | --- | --- | --- | --- |
 | FACED | CBraMod | Complete; LMDB, channel order, `/100`, split overlap and strict checkpoint audited | Dense full fine-tuning, 3 seeds | Corrected frozen packet 24/24 complete; r=32 seed-42 gate complete | Corrected frozen controls 24/24 complete | **Packet complete; r=64 retained as operational setting** |
 | SEED-V | CBraMod | Audit complete; `(62,1,200)`, `/100`, 62-channel manifest, split hashes and no overlap verified | Dense full fine-tuning, 3 seeds | Corrected frozen packet 21/21 complete; r=32 diagnostic gate complete | Corrected frozen controls 21/21 complete | **Complete; r=64 locked** |
-| ISRUC | CBraMod | **Serialized audit passed; 3,559/468/435 sequences, no overlap, `(20,6,6000)` stored -> `(20,6,30,200)` model geometry, divisor `1.0`** | Seed-42 dense baseline complete; LR sweep `13001412–13001413` pending | Not started | Not started | **Baseline/LR gate in progress; no adaptor jobs yet** |
+| ISRUC | CBraMod | **Serialized audit passed; 3,559/468/435 sequences, no overlap, `(20,6,6000)` stored -> `(20,6,30,200)` model geometry, divisor `1.0`** | Seed-42 dense + LR gate complete; operational LR `2e-4 / 3.536e-4` | Seed-42 remaining ladder not yet submitted | Seed-42 remaining controls not yet submitted | **Single-seed adaptor/control ladder ready** |
 
 ## SEED-V locked contract
 
@@ -188,9 +188,18 @@ sequence-level `[B,20,6,30,200] -> [B,20,5]` forward/backward/test path.
 
 The first full baseline is job `12992930`, seed 42, batch 8, 20 epochs. It
 completed with test BA `0.7855`, κ `0.7397`, and weighted F1 `0.8003`, with
-validation-κ selection at epoch 5. The trajectory is non-monotonic: training
-loss continues to fall while validation κ oscillates after the early peak.
-Jobs `13001412` and `13001413` are the only follow-up jobs, sweeping the
-backbone/head LR pair down and up by 2x while retaining every other setting.
-Do not submit native adapters, controls, or multiseeds until this sweep is
-reviewed and one operational baseline recipe is locked.
+validation-κ selection at epoch 5. The LR sweep jobs `13001412` and
+`13001413` also completed cleanly. The upper pair (`lr=2e-4`,
+`head_lr=3.536e-4`) is the operational choice by validation κ (`0.7381`),
+and has test BA `0.7884`, κ `0.7503`, weighted F1 `0.8078`. These test values
+are reported descriptively; the recipe was selected by validation κ.
+
+The remaining seed-42 ladder is exactly: frozen probe; frozen native channel,
+patch, and channel+patch; frozen generic bottleneck; frozen LoRA QKV-r8;
+frozen upper-2; frozen axis-blind; and native full-backbone channel, patch,
+and channel+patch. All use the locked dense LR pair, batch 8, 20 epochs,
+divisor 1.0, and the same checkpoint/split/selection protocol. Native/generic
+adapter and LoRA LR is `2e-5` (0.1x dense LR), while upper-2 uses `2e-4`.
+They are queued in two `afterok` lanes, at most two A6000 jobs concurrently.
+No three-seed promotion is allowed until these single-seed trajectories and
+mode/diagnostic reports are reviewed.
