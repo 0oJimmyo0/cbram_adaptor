@@ -260,3 +260,5 @@ passed all eleven configurations, including output shape `[B,20,5]`,
 trainability, and frozen `.eval()` mode. The production queue is split into
 two `afterok` lanes with one A6000 per job. No multiseed jobs may be submitted
 until the entire single-seed ladder is technically clean and interpreted.
+The submitted IDs are lane A `13001561–13001566` and lane B
+`13001567–13001571`; only the two lane heads are dependency-free.

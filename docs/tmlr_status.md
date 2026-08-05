@@ -203,3 +203,7 @@ adapter and LoRA LR is `2e-5` (0.1x dense LR), while upper-2 uses `2e-4`.
 They are queued in two `afterok` lanes, at most two A6000 jobs concurrently.
 No three-seed promotion is allowed until these single-seed trajectories and
 mode/diagnostic reports are reviewed.
+
+The queued job IDs are `13001561–13001566` for lane A and `13001567–13001571`
+for lane B. The two lane heads are currently pending with no dependency; all
+other jobs correctly wait on their predecessor.
